@@ -446,6 +446,8 @@ export const EN = {
   'Derrape automático': 'Automatic drift',
   'Derrapa y hace trucos solo': 'Drifts and does tricks by itself',
   'Gira el móvil para jugar en horizontal': 'Rotate your phone to play in landscape',
+  '📄 Política de privacidad': '📄 Privacy policy',
+  'Política de privacidad': 'Privacy policy',
 };
 
 // Plantillas con huecos {x}: [español, inglés]. Se prueban en orden; las más generales, al final.

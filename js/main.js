@@ -130,7 +130,7 @@ function updateShowTrail() {
 
 // ---------- Pantallas ----------
 let screen = 'title';
-const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0], tutoask: [0.2, 0], modes: [0, 0] };
+const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0], tutoask: [0.2, 0], modes: [0, 0], privacy: [0, 0] };
 function placeShow() {
   const o = OFFSETS[screen]; if (!o) return;
   const portrait = innerWidth < innerHeight;
@@ -943,6 +943,7 @@ function wireUi() {
   $('set-sfx').onchange = () => { persist(); sfx.coin(); };
   $('set-btnalpha').oninput = e => { save.settings.btnAlpha = +e.target.value; applyControls(); };
   $('set-btnalpha').onchange = () => persist();
+  $('set-privacy').onclick = () => { sfx.ui(); const f = $('privacy-frame'); if (!f.getAttribute('src')) f.src = 'privacy.html'; show('privacy'); };
   $('set-reset').onclick = () => {
     if (confirm(t('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?'))) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); applyControls(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
   };

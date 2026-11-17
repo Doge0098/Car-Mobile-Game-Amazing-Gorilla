@@ -278,3 +278,5 @@ html[lang=en] .help[lang=es], html[lang=es] .help[lang=en] { display: none; }
 #mode-cards { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
 #mode-cards .card { min-height: 150px; justify-content: flex-start; } #mode-cards .card h3 { font-size: 18px; max-width: calc(100% - 54px); }
 #tod-seg button.on { background: var(--cyan); }
+.frame { flex: 1; width: 100%; border: 0; border-radius: 16px; background: #fff; margin-top: 8px; }
+#set-privacy { align-self: center; }
