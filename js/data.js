@@ -198,6 +198,23 @@ export const TRACKS = [
     deepAll: true, tunnel: [0.61, 0.68], ringsAt: [0.14, 0.25, 0.38, 0.5, 0.75, 0.88], ramps: [],
     extras: { weather: 'none', hazard: 'crab', life: null, liquidMode: 0, lamp: 0x7ff0ff, deck: 0x6a7a9a, tunnelCol: 0x4a6a8a, tunnelGlow: 0x7ff0ff, puddle: null, mark: 0x2a3a5a, ambience: '' },
   },
+  {
+    // pista pequeña y ancha para la batalla de globos (no aparece en las listas de carrera)
+    id: 'arena', name: 'Arena Gorila', cup: -1, hidden: true, R: 108, width: 26,
+    waves: [[2, 0.1, 0.5]], seed: 5,
+    theme: {
+      skyTop: 0x2a7bff, skyBottom: 0xffe2b0, fog: 0xffd8b0, fogNear: 120, fogFar: 480,
+      ground: 0x4ad65a, ground2: 0x2aae42, liquid: 0x1ec8ff, liquidLevel: -2.2, liquidGlow: 0,
+      road: '#5a4a6a', line: '#ffd21f', curbA: 0xff4fd8, curbB: 0xffffff,
+      sun: 0xfff0c0, light: 1.25, ambientSky: 0xdfeaff, ambientGround: 0x3a8a3a,
+      props: [['tree', 60], ['palm', 40], ['flower', 60], ['mushroom', 20]],
+      shore: 0xe8d79a, rock: 0x8a8f7a, peak: 0xa6e86a, cloudAmt: 0.5,
+      fx: 'fireflies', fxColor: 0xfff0a0, hills: 14, mountains: 0x6a9ad8, clouds: 0xffffff,
+    },
+    music: { tempo: 142, root: 55, scale: 'minor', prog: [0, 3, 5, 4], seed: 91, style: 'neon' },
+    hills: [[0, 0], [1, 0]], ramps: [0.25, 0.75], noShortcut: true,
+    extras: { weather: 'none', hazard: null, life: 'birds', liquidMode: 0, lamp: 0xff4fd8, deck: 0x9a6a3a, tunnelCol: 0x6f7f6a, tunnelGlow: 0xffd98a, puddle: null, mark: 0x15151c, ambience: 'jungle' },
+  },
 ];
 
 export const CUPS = [
