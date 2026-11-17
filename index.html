@@ -44,8 +44,19 @@
     <button class="btn c4 half" data-go="garage">🦍 Garaje</button>
     <button class="btn c7 half" data-go="meta">🏅 Misiones y logros</button>
     <button class="btn c5 half" data-go="settings">⚙️ Ajustes</button>
+    <button class="btn c8 half" data-go="tutorial">🎓 Tutorial</button>
     <button class="btn c6 hidden" id="btn-install">📲 Instalar juego</button>
   </nav>
+</section>
+
+<!-- OFERTA DEL TUTORIAL (primera vez) -->
+<section id="s-tutoask" class="screen modal">
+  <div class="box">
+    <h2>¿Primera vez?</h2>
+    <p class="ask">Aprende a conducir en una carrera guiada de un par de minutos.<br>Al terminar te llevas 50 🍌.</p>
+    <button class="btn c1" id="tuto-yes">🎓 Jugar el tutorial</button>
+    <button class="btn c5" id="tuto-no">Ahora no</button>
+  </div>
 </section>
 
 <!-- SELECCIÓN DE MAPA -->
@@ -152,6 +163,7 @@
     <canvas id="minimap" width="140" height="140"></canvas>
   </div>
   <div class="hud-missions" id="hud-missions"><h4>Misiones</h4><ul class="missions" id="hud-missions-list"></ul></div>
+  <div class="hud-tuto" id="hud-tuto"><span id="hud-tuto-text"></span></div>
   <div class="hud-msg" id="hud-msg"></div>
   <div class="hud-warn hidden" id="hud-wrong">↩ ¡Sentido contrario!</div>
   <div class="hud-hint" id="hud-hint"></div>

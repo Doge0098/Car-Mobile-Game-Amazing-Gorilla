@@ -12,6 +12,7 @@ import { setOutline, setOutlineRes } from './outline.js';
 import { Post } from './post.js';
 import { Podium } from './podium.js';
 import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
+import { Tutorial, TUTORIAL } from './tutorial.js';
 import { MISSIONS, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
@@ -171,6 +172,18 @@ let missions = [], missionT = 0;
 const mctx = { st: null, pos: 0, total: 0, time: 0, par: 0, finished: false, started: false };
 const rivalBuf = [{ pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }], rivalOut = [];
 
+// Reglas propias de cada modo; lo que no aparece usa los valores normales. Los modos nuevos se añaden aquí.
+//  laps · rivals (número de rivales) · difficulty · tune (ajustes del jugador en lugar de sus mejoras) · podium (escena de podio al acabar)
+const MODE_RULES = {
+  race: { podium: true },
+  cup: {},
+  time: {},
+  tutorial: { laps: TUTORIAL.laps, rivals: TUTORIAL.rivals, difficulty: TUTORIAL.difficulty, tune: TUTORIAL.tune },
+};
+const rules = () => MODE_RULES[mode] || {};
+let tuto = null, tutoRev = -1; // tutorial en curso
+const TUTO_BTNS = ['btn-left', 'btn-right', 'btn-drift', 'btn-item', 'btn-brake', 'hud-item'];
+
 const cup1Unlocked = () => Object.keys(save.trophies).some(k => k.startsWith('platano_'));
 const trackUnlocked = t => t.cup === 0 || cup1Unlocked();
 const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
@@ -190,7 +203,7 @@ function disposeRace() {
   if (track) track.dispose();
   if (ambient) ambient.dispose();
   if (fxAdd) { fxAdd.points.geometry.dispose(); fxAdd.mat.dispose(); fxNorm.points.geometry.dispose(); fxNorm.mat.dispose(); }
-  race = track = raceScene = fxAdd = fxNorm = ambient = null;
+  race = track = raceScene = fxAdd = fxNorm = ambient = tuto = null;
   $('speedfx').classList.remove('on');
 }
 
@@ -211,11 +224,12 @@ function startRace(trackId) {
     raceScene.add(fxAdd.points, fxNorm.points);
     ambient = new Ambient(currentTrack.theme.fx, currentTrack.theme.fxColor, q < 0.7 ? 60 : 140);
     raceScene.add(ambient.points);
+    const R = rules();
     race = new Race({
-      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: diff(), ...gfx,
+      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: R.difficulty || diff(), laps: R.laps, ...gfx,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
-      playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: upgradeTune(save),
-      rivals: cupState ? cupState.rivals : makeLineup(RACERS - 1),
+      playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
+      rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1),
       ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; fpsAcc = 0; fpsN = 0;
@@ -224,6 +238,8 @@ function startRace(trackId) {
     missions = pickMissions(mode, mctx.par); missionT = 0; syncMissions();
     renderMissions($('hud-missions-list'), false);
     $('hud-missions').classList.toggle('hidden', !missions.length);
+    tuto = mode === 'tutorial' ? new Tutorial(race, { tilt: save.settings.controls === 'tilt' }) : null;
+    $('hud').classList.toggle('tuto', !!tuto); renderTuto();
     buildMinimap();
     $('hud-total').textContent = mode === 'time' ? '' : '/' + race.racers.length;
     $('hud-laps').textContent = race.laps;
@@ -257,7 +273,32 @@ function renderMissions(el, live) {
   el.classList.toggle('hidden', !missions.length);
 }
 
+// ---------- Tutorial ----------
+function startTutorial() { mode = 'tutorial'; cupState = null; startRace(TUTORIAL.track); }
+// Pinta el aviso del tutorial y resalta los botones que toca usar
+function renderTuto() {
+  const el = $('hud-tuto'), text = tuto ? tuto.text : '';
+  tutoRev = tuto ? tuto.rev : -1;
+  el.classList.toggle('show', !!text);
+  if (text) { $('hud-tuto-text').textContent = text; el.classList.toggle('good', tuto.good); }
+  for (const id of TUTO_BTNS) $(id).classList.toggle('tuto-hl', !!tuto && tuto.hl.includes(id));
+}
+function showTutorialResults() {
+  const first = save.tutorial !== 'done', reward = first ? TUTORIAL.reward : 0;
+  $('r-title').textContent = '¡Tutorial completado!';
+  $('r-sub').textContent = 'Esto es lo que has practicado. Puedes repetirlo cuando quieras desde el menú.';
+  $('r-list').innerHTML = '';
+  $('r-missions').innerHTML = tuto.summary().map(l => `<li class="${l.done ? 'ok' : 'ko'}"><i>${l.done ? '✓' : '✗'}</i><span>${l.text}</span><b></b><em></em></li>`).join('');
+  $('r-missions').classList.remove('hidden');
+  $('r-reward').textContent = first ? fill('+{n} 🍌 por terminar el tutorial', { n: reward }) : 'Ya tenías el premio del tutorial';
+  $('r-retry').classList.remove('hidden'); $('r-next').textContent = 'Menú ▶';
+  save.tutorial = 'done'; if (reward) earn(reward);
+  persist(); renderTuto();
+  show('results');
+}
+
 function hint(text) {
+  if (tuto && text) return; // en el tutorial solo hablan sus propios avisos
   const h = $('hud-hint'); h.textContent = text; h.classList.toggle('show', !!text);
   clearTimeout(hint.t); if (text) hint.t = setTimeout(() => h.classList.remove('show'), 4200);
 }
@@ -358,6 +399,7 @@ function updateHud(dt) {
 function showResults() {
   if (resultsShown) return;
   resultsShown = true;
+  if (tuto) { showTutorialResults(); return; }
   const res = race.results(), me = res.find(r => r.isPlayer), d = diff();
   const list = $('r-list'); list.innerHTML = '';
   let reward = 0, sub = currentTrack.name, rewardTxt = '', record = false;
@@ -396,7 +438,7 @@ function showResults() {
   $('r-sub').textContent = sub;
   $('r-reward').textContent = rewardTxt;
   earn(reward); persist(); awardAchievements();
-  if (mode === 'race') startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
+  if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
   else show('results');
 }
 
@@ -449,7 +491,7 @@ function showCupFinal() {
 }
 
 function toMenu() {
-  disposeRace(); cupState = null;
+  disposeRace(); cupState = null; if (mode === 'tutorial') mode = 'race';
   startMusic(MENU_MUSIC); refreshShow(); show('menu');
 }
 
@@ -654,7 +696,10 @@ function buildSettings() {
 function wireUi() {
   // con el juego en pausa no se reactiva el sonido al tocar la pantalla
   document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
-  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); show('menu'); };
+  // la primera vez se ofrece el tutorial
+  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else show('menu'); };
+  $('tuto-yes').onclick = () => { sfx.ui(); startTutorial(); };
+  $('tuto-no').onclick = () => { sfx.back(); show('menu'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     sfx.ui(); const g = b.dataset.go;
     if (g === 'race' || g === 'time') { mode = g; buildTracks(); show('tracks'); }
@@ -662,6 +707,7 @@ function wireUi() {
     else if (g === 'garage') { gSel = null; show('garage'); buildGarage(); }
     else if (g === 'settings') { buildSettings(); show('settings'); }
     else if (g === 'meta') { mTab = 'ach'; buildMeta(); show('meta'); }
+    else if (g === 'tutorial') startTutorial();
   });
   document.querySelectorAll('#meta-tabs .tab').forEach(t => t.onclick = () => { mTab = t.dataset.mtab; sfx.ui(); buildMeta(); });
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { sfx.back(); refreshShow(); show('menu'); });
@@ -724,6 +770,7 @@ function frame(now) {
       pollInput(dt);
       if (input.pausePressed && !resultsShown) { consumePresses(); setPaused(true); return; }
       race.update(dt, input);
+      if (tuto) { tuto.update(dt, input); if (tuto.rev !== tutoRev) renderTuto(); }
       consumePresses();
       race.updateCamera(camera, dt, camera.aspect);
       track.update(dt, race.t, camera.position, race.player);
@@ -781,4 +828,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };

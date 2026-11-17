@@ -198,6 +198,17 @@ html, body {
   .r-body .results { flex: 1.25; align-self: stretch; } .r-body .missions { flex: 1; }
 }
 
+/* ---------- Tutorial ---------- */
+.hud-tuto { left: 50%; top: calc(clamp(62px, 15vmin, 92px) + 20px + var(--sa-t)); transform: translateX(-50%) scale(.92); width: max-content; max-width: min(60vw, 470px); text-align: center; background: rgba(16, 6, 46, .84); border: 3px solid var(--cyan); border-radius: 16px; padding: 7px 14px; font-size: clamp(13px, 3.1vmin, 19px); line-height: 1.25; opacity: 0; transition: opacity .25s, transform .25s; box-shadow: 0 4px 0 rgba(0, 0, 0, .35); }
+.hud-tuto.show { opacity: 1; transform: translateX(-50%); }
+.hud-tuto.good { border-color: var(--green); background: rgba(10, 74, 46, .88); }
+.ctl.tuto-hl, .hud-item.tuto-hl { animation: hl .45s ease-in-out infinite alternate; }
+@keyframes hl { from { box-shadow: 0 0 0 3px var(--yellow), 0 0 14px 4px rgba(255, 210, 31, .7); } to { box-shadow: 0 0 0 7px var(--yellow), 0 0 30px 12px rgba(255, 210, 31, .9); } }
+@media (orientation: landscape) { .hud.tuto .hud-msg { top: 58%; } }
+@media (orientation: portrait) { .hud-tuto { top: calc(clamp(205px, 52vmin, 275px) + var(--sa-t)); max-width: 88vw; } }
+.box p.ask { margin: 0; max-width: 340px; font-weight: 700; line-height: 1.35; }
+.results:empty { display: none; }
+
 /* ---------- Misiones y logros ---------- */
 #meta-tabs { margin: 6px auto 0; width: 100%; max-width: 560px; }
 .meta-body { flex: 1; overflow-y: auto; touch-action: pan-y; padding: 10px 4px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); grid-auto-rows: max-content; gap: 8px 10px; align-content: start; }
