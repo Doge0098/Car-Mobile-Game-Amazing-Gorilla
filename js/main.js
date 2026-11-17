@@ -493,7 +493,8 @@ function buildSettings() {
 
 // ---------- Eventos de interfaz ----------
 function wireUi() {
-  document.addEventListener('pointerdown', () => initAudio(), { passive: true });
+  // con el juego en pausa no se reactiva el sonido al tocar la pantalla
+  document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
   $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); show('menu'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     sfx.ui(); const g = b.dataset.go;
