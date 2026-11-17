@@ -759,6 +759,7 @@ function wireUi() {
   document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
   // la primera vez se ofrece el tutorial
   $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else show('menu'); };
+  $('tuto-reward').textContent = TUTORIAL.reward;
   $('tuto-yes').onclick = () => { sfx.ui(); startTutorial(); };
   $('tuto-no').onclick = () => { sfx.back(); show('menu'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
