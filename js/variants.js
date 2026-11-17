@@ -23,7 +23,8 @@ export function todDef(def, tod) {
 // Circuito nuevo a partir de una semilla: trazado, desniveles y tramos especiales al azar, con el aspecto de uno de los mapas.
 export function surpriseTrack(seed) {
   const r = rng(seed * 7919 + 17), pick = a => a[Math.floor(r() * a.length)];
-  const base = pick(TRACKS.filter(t => !t.deepAll)); // el fondo marino necesita un circuito entero bajo el agua
+  // aspecto prestado de un circuito normal: el fondo marino necesita un circuito entero bajo el agua y la estación espacial no tiene agua para el barco
+  const base = pick(TRACKS.filter(t => !t.deepAll && !t.theme.space));
   // planta: tres ondas, cada una con amplitud limitada para que no salgan curvas imposibles
   const k1 = 2 + Math.floor(r() * 2), k2 = k1 + 3, k3 = k2 + 3 + Math.floor(r() * 2);
   const waves = [[k1, 0.12 + r() * 0.04, r() * 6.28], [k2, (1.5 + r() * 0.6) / (k2 * k2), r() * 6.28], [k3, (2.2 + r() * 1.0) / (k3 * k3), r() * 6.28]];
