@@ -1,0 +1,21 @@
+/* Estilos de la personalización extra: copia de seguridad (Ajustes) y foco del mando. */
+
+/* ---------- Copia de seguridad ---------- */
+.bk-btns { display: flex; gap: 8px; }
+.bk-row { display: flex; flex-wrap: wrap; gap: 10px; } .bk-row .btn { flex: 1; min-width: 110px; }
+.box p.bk-text { margin: 0; font-weight: 700; line-height: 1.35; }
+#bk-code {
+  width: 100%; height: 104px; resize: none; font: 600 12px/1.35 ui-monospace, Menlo, Consolas, monospace; color: #fff;
+  background: rgba(16, 6, 46, .6); border: 3px solid var(--ink); border-radius: 12px; padding: 8px 10px; word-break: break-all;
+  user-select: text; -webkit-user-select: text; touch-action: pan-y; /* el resto del juego no deja seleccionar texto */
+}
+#bk-code::placeholder { color: rgba(255, 255, 255, .55); }
+#bk-code:focus { outline: 3px solid var(--yellow); outline-offset: -1px; }
+#bk-paste, #bk-import, .import #bk-copy { display: none; }
+.import #bk-paste, .import #bk-import { display: block; }
+@media (max-height: 400px) { #bk-code { height: 66px; } }
+
+/* ---------- Foco del mando: el botón al que apunta la palanca ---------- */
+.pad-focus { outline: 4px solid #fff !important; outline-offset: -4px; animation: padfocus .45s ease-in-out infinite alternate; }
+.pulse.pad-focus { animation: pulse 1s ease-in-out infinite alternate, padfocus .45s ease-in-out infinite alternate; }
+@keyframes padfocus { to { outline-color: var(--pink); } }

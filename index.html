@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/custom.css">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -143,6 +144,7 @@
     <div class="row"><label>Resplandor</label><div class="seg" id="set-bloom"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Vibración</label><div class="seg" id="set-haptics"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Copia de seguridad</label><div class="bk-btns"><button class="btn small c3" id="set-export">Exportar</button><button class="btn small c7" id="set-import">Importar</button></div></div>
     <div class="row"><label>Progreso</label><button class="btn small danger" id="set-reset">Borrar partida</button></div>
     <p class="help" lang="es" data-noi18n>
       <b>Cómo jugar:</b> el coche acelera solo. Gira con ◀ ▶ (o inclinando el móvil), mantén <b>DERRAPE</b> en las curvas
@@ -186,6 +188,21 @@
       <b>Install:</b> on Android use “Install game” or the browser menu → “Add to Home screen”.
       On iPhone: Share → “Add to Home Screen”. After that it works offline.
     </p>
+  </div>
+</section>
+
+<!-- COPIA DE SEGURIDAD (exportar o importar la partida con un código) -->
+<section id="s-backup" class="screen modal">
+  <div class="box wide">
+    <h2>Copia de seguridad</h2>
+    <p class="bk-text" id="bk-text"></p>
+    <textarea id="bk-code" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <div class="bk-row">
+      <button class="btn c3" id="bk-copy">📋 Copiar</button>
+      <button class="btn c3" id="bk-paste">📋 Pegar</button>
+      <button class="btn c1" id="bk-import">Importar</button>
+      <button class="btn c5" id="bk-close" data-padback>Cerrar</button>
+    </div>
   </div>
 </section>
 

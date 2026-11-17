@@ -669,4 +669,15 @@ export function haptic(kind) {
   try {
     if (hapticsOn && HAPTICS[kind] != null && typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(HAPTICS[kind]);
   } catch (e) { /* sin vibración */ }
+  // con mando: la misma sacudida en sus motores, más fuerte cuanto más larga
+  try {
+    const h = HAPTICS[kind];
+    if (!hapticsOn || h == null || typeof navigator === 'undefined' || !navigator.getGamepads) return;
+    const ms = Array.isArray(h) ? h.reduce((a, b) => a + b, 0) : h, k = Math.min(1, 0.3 + ms / 220);
+    for (const g of navigator.getGamepads()) {
+      const v = g && g.vibrationActuator; if (!v || !v.playEffect) continue;
+      const p = v.playEffect('dual-rumble', { startDelay: 0, duration: Math.max(40, ms), strongMagnitude: k, weakMagnitude: Math.min(1, k + 0.2) });
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (e) { /* sin mando o sin motores */ }
 }

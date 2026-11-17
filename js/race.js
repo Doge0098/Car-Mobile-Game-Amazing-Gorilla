@@ -8,6 +8,7 @@ import { SkidMarks, Trail, Weather, Hazards, Underwater } from './world.js';
 import { tryShortcut, stepFlight, applyCurrents, gliderAlt } from './extras.js';
 import { Rules } from './rules.js';
 import { Replay } from './replay.js';
+import { Emotes } from './emotes.js';
 
 const sfx = A.sfx;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -42,6 +43,7 @@ class Racer {
     const tune = isPlayer && race.playerTune;
     if (tune) for (const k of ['maxSpeed', 'accel', 'turnRate', 'grip', 'boostK']) this[k] += tune[k] || 0;
     this.hat = (isPlayer && race.playerHat) || null; this.wheels = (isPlayer && race.playerWheel) || null;
+    this.sticker = (isPlayer && race.playerSticker) || null; this.dance = (isPlayer && race.playerDance) || null;
     this.trailDef = (isPlayer && race.playerTrail) || FIRE_TRAIL;
 
     const tr = race.track, g = tr.grid(slot);
@@ -69,7 +71,7 @@ class Racer {
     this.root = new THREE.Group();
     this.pitchG = new THREE.Group(); this.root.add(this.pitchG);
     this.tilt = new THREE.Group(); this.pitchG.add(this.tilt);
-    this.kart = makeKart(kart, color, null, this.wheels); this.tilt.add(this.kart);
+    this.kart = makeKart(kart, color, null, this.wheels, this.sticker); this.tilt.add(this.kart);
     this.gorilla = mountGorilla(this.kart, makeGorilla(char, null, false, this.hat));
     this.tilt.add(this.gorilla);
     this.rigs = makeModeRigs(); this.tilt.add(this.rigs.glider, this.rigs.boat, this.rigs.sub);
@@ -103,6 +105,7 @@ class Racer {
     if (this.isPlayer) { sfx.hit(); race.shake = 0.5; A.haptic?.('hit'); } else if (this.near()) sfx.bump();
     if (this.isPlayer || this.near()) race.shock(this.x, this.y + 1.2, this.z, 0xff5a3c, 6);
     race.voice(this, this.shrinkT > 0 ? 'tiny' : 'hit');
+    race.emotes.hit(this);
     if (race.rules) race.rules.onHit(this, by);
     return true;
   }
@@ -365,7 +368,7 @@ class Racer {
     let mode = 'drive', face = 'neutral';
     if (this.spinT > 0) { mode = 'dizzy'; face = 'dizzy'; }
     else if (this.poundT > 0) { mode = 'pound'; face = 'angry'; }
-    else if (this.finished) { mode = this.pos <= 3 ? 'cheer' : 'sad'; face = this.pos <= 3 ? 'happy' : 'sad'; }
+    else if (this.finished) { mode = this.pos <= 3 ? this.dance || 'cheer' : 'sad'; face = this.pos <= 3 ? 'happy' : 'sad'; }
     else if (this.trickT > 0 || (this.air && this.trickDone)) { mode = 'trick'; face = 'happy'; }
     else if (this.shrinkT > 0 || this.stallT > 0) face = 'scared';
     else if (this.tauntT > 0 || this.air) face = 'happy';
@@ -449,6 +452,7 @@ export class Race {
     // opts: scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent, playerChar/Kart/Color...
     //  opcionales: laps · rivals [{ char, kart, color }] · playerTune { maxSpeed, accel, turnRate, grip, boostK } (se suman al jugador)
     //  playerHat · playerWheel · playerTrail { color, sparks, rainbow } · playerHorn · aiItems: false (los rivales no cogen objetos) · noHazards
+    //  playerSticker (id de pegatina) · playerDance (modo de animateGorilla al acabar en el podio) · playerEmote (emoji del gesto)
     Object.assign(this, opts);
     this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
@@ -467,6 +471,7 @@ export class Race {
     this.cocoMat = toon(0x7a4a22);
     this.waveGeo = new THREE.RingGeometry(0.82, 1, 40);
     this.marks = new SkidMarks(this.quality < 0.7 ? 300 : 700); this.scene.add(this.marks.mesh);
+    this.emotes = new Emotes(() => this.t); // bocadillos con gestos (opts.playerEmote: el emoji del jugador)
 
     const pc = charById(this.playerChar), pk = kartById(this.playerKart);
     this.racers = []; this.hornCd = 0;
@@ -644,6 +649,7 @@ export class Race {
   honk(r) {
     if (this.hornCd > 0 || r.spinT > 0) return;
     this.hornCd = 0.5; sfx.horn?.(this.playerHorn);
+    this.emotes.show(r, this.playerEmote);
     r.tauntT = Math.max(r.tauntT, 0.45);
     for (const o of this.live) {
       const dp = o.prog - r.prog;
@@ -730,6 +736,7 @@ export class Race {
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
       time: this.rules ? 0 : r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
       out: !!r.out, balloons: r.balloons || 0, pops: r.pops || 0, isRival: r.isRival,
+      sticker: r.sticker, dance: r.dance,
     }));
   }
 
@@ -878,6 +885,7 @@ export class Race {
     this.ranking();
     for (const r of this.live) {
       if (this.state === 'racing' && this.time > 4 && r.pos !== r.prevPos) {
+        if (r.pos < r.prevPos) this.emotes.overtake(r);
         if (r.pos < r.prevPos) { r.tauntT = 1.1; r.st.overtakes++; this.voice(r, 'laugh'); if (r.isPlayer) sfx.whoosh?.(); }
         else { r.angryT = 1.3; if (r.isPlayer) sfx.whoosh?.(0, 0.6); }
       }
@@ -998,6 +1006,7 @@ export class Race {
 
   dispose() {
     this.hazards.dispose(); this.weather.dispose(); this.marks.dispose();
+    this.emotes.dispose();
     for (const r of this.racers) r.trail.dispose();
     if (this.rivalTag) this.rivalTag.material.dispose();
     for (const b of this.bolts) { b.line.geometry.dispose(); b.line.material.dispose(); }
