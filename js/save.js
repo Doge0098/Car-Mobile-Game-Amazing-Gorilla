@@ -21,6 +21,7 @@ const defaults = () => ({
   achievements: {},  // id de logro -> 1 (conseguido y cobrado)
   tutorial: '',      // '' sin ofrecer · 'seen' ofrecido · 'done' completado
   rival: { char: '', level: 0, wins: 0, losses: 0 }, // rival personal: quién es y lo fuerte que corre
+  retos: [],         // retos de amigos que ya no dan premio: huella corta de cada código superado o enviado (ver js/share.js)
   settings: {
     controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, outline: true, haptics: true,
     btnSize: 'm', lefty: false, btnAlpha: 1, // tamaño (s/m/l), modo zurdo y opacidad de los botones táctiles

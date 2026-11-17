@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Gorilla Racing">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/share.css">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -70,6 +71,7 @@
   <div class="toolbar" id="tracks-bar">
     <div class="seg" id="kind-seg"><button data-v="race">Carrera</button><button data-v="elim">Eliminación</button></div>
     <div class="seg" id="variant-seg"><button data-v="">Normal</button><button data-v="mirror">Espejo</button><button data-v="reverse">Inverso</button></div>
+    <button class="btn c7 small" id="tracks-reto">🤝 Introducir reto</button>
   </div>
   <div class="cards" id="track-cards"></div>
 </section>
@@ -253,6 +255,7 @@
     <div class="reward" id="r-reward"></div>
     <div class="rowbtns">
       <button class="btn c7" id="r-replay">🎬 Repetición</button>
+      <button class="btn c4 hidden" id="r-reto">📤 Retar a un amigo</button>
       <button class="btn c3" id="r-retry">↻ Repetir</button>
       <button class="btn c1" id="r-next">Continuar ▶</button>
     </div>
@@ -263,6 +266,8 @@
 <section id="s-replay" class="screen replay">
   <div class="replay-tag">● REPETICIÓN</div>
   <button class="btn c5 small" id="replay-skip">Saltar ▶</button>
+  <button class="btn c6 small hidden" id="replay-rec">⏺ Grabar vídeo</button>
+  <div class="hidden" id="replay-rec-tag"><i>●</i> <span>GRABANDO</span> <b id="replay-rec-time">0:00</b></div>
 </section>
 
 <!-- MODO FOTO -->
@@ -275,6 +280,52 @@
   </div>
 </section>
 
+<!-- RETOS ENTRE AMIGOS Y VÍDEO DE LA REPETICIÓN (js/share.js) -->
+<section id="s-reto" class="screen modal">
+  <div class="box">
+    <h2>🤝 Reto</h2>
+    <p class="ask" id="reto-text"></p>
+    <p class="reto-info" id="reto-info"></p>
+    <p class="reto-who" id="reto-who"></p>
+    <button class="btn c1" id="reto-yes">🏁 Aceptar el reto</button>
+    <button class="btn c5" id="reto-no">Ahora no</button>
+  </div>
+</section>
+<section id="s-retoin" class="screen modal">
+  <div class="box">
+    <h2>🤝 Introducir reto</h2>
+    <p class="ask">Pega aquí el código o el enlace que te ha enviado tu amigo.</p>
+    <textarea class="reto-code" id="retoin-text" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off" data-noi18n></textarea>
+    <p class="reto-err" id="retoin-err"></p>
+    <div class="rowbtns">
+      <button class="btn c3" id="retoin-paste">📋 Pegar</button>
+      <button class="btn c1" id="retoin-ok">Ver reto ▶</button>
+    </div>
+    <button class="btn c5" id="retoin-cancel">Cancelar</button>
+  </div>
+</section>
+<section id="s-retoout" class="screen modal">
+  <div class="box">
+    <h2>📤 Retar a un amigo</h2>
+    <p class="ask">Envía el enlace a un amigo: correrá contra tu fantasma. También puede pegar este código en Contrarreloj.</p>
+    <p class="reto-info" id="retoout-info"></p>
+    <textarea class="reto-code" id="retoout-code" rows="2" readonly spellcheck="false" data-noi18n></textarea>
+    <div class="rowbtns">
+      <button class="btn c1" id="retoout-share">📤 Enviar enlace</button>
+      <button class="btn c3" id="retoout-copy">📋 Copiar código</button>
+    </div>
+    <button class="btn c5" id="retoout-close">Cerrar</button>
+  </div>
+</section>
+<section id="s-video" class="screen modal">
+  <div class="box">
+    <h2>🎬 Vídeo listo</h2>
+    <p class="ask" id="video-info"></p>
+    <button class="btn c1 hidden" id="video-share">📤 Compartir vídeo</button>
+    <button class="btn c3" id="video-save">⬇️ Guardar vídeo</button>
+    <button class="btn c5" id="video-close">Cerrar</button>
+  </div>
+</section>
 <div id="toast"></div>
 <div id="loading" class="hidden"><div class="spinner">🍌</div><p>Cargando…</p></div>
 <script type="module" src="js/main.js"></script>
