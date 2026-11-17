@@ -18,13 +18,13 @@ export const CHARACTERS = [
 export const KARTS = [
   { id: 'platano', name: 'Platanomóvil', color: 0xffd21f, color2: 0x2d2d3a, shape: 0,
     stats: { speed: 3, accel: 3, handling: 3 }, price: 0 },
-  { id: 'rayo', name: 'Rayo Selva', color: 0x29e06b, color2: 0x10301c, shape: 1,
+  { id: 'rayo', name: 'Cocodrilo Veloz', color: 0x29e06b, color2: 0x10301c, shape: 1,
     stats: { speed: 4, accel: 3, handling: 2 }, price: 200 },
-  { id: 'coco', name: 'Coco Tanque', color: 0xff7a1a, color2: 0x4a2a12, shape: 2,
+  { id: 'coco', name: 'Barril Tanque', color: 0xa8643a, color2: 0x3a2a22, shape: 2,
     stats: { speed: 3, accel: 2, handling: 5 }, price: 200 },
-  { id: 'cometa', name: 'Cometa', color: 0x31b6ff, color2: 0xffffff, shape: 3,
+  { id: 'cometa', name: 'Cohete Cometa', color: 0x31b6ff, color2: 0xffffff, shape: 3,
     stats: { speed: 5, accel: 3, handling: 3 }, price: 600 },
-  { id: 'aurora', name: 'Aurora', color: 0xc04dff, color2: 0x22e6ff, shape: 4,
+  { id: 'aurora', name: 'Platillo Aurora', color: 0xc04dff, color2: 0x22e6ff, shape: 4,
     stats: { speed: 5, accel: 4, handling: 4 }, price: 1200 },
 ];
 
@@ -56,7 +56,8 @@ export const TRACKS = [
       fx: 'fireflies', fxColor: 0xf6ff8a, hills: 26, mountains: 0x2a9d6a, clouds: 0xffffff,
     },
     music: { tempo: 132, root: 57, scale: 'major', prog: [0, 3, 4, 0], seed: 3 , style: 'jungle' },
-    elev: [[1, 10], [3, 8]], tunnel: [0.61, 0.68], bridge: [0.355, 0.425], ramps: [0.25, 0.87],
+    hills: [[0, 0], [0.06, 1.2], [0.25, 5], [0.33, 9], [0.39, 10], [0.455, 14], [0.6, 7], [0.68, 6], [0.76, 4], [0.795, 1.5], [0.96, 0.6], [1, 0]],
+    boat: [0.105, 0.17], glide: [0.475, 0.53, 15, 5], sub: [0.812, 0.918, 0.036, 5.5], tunnel: [0.61, 0.68], bridge: [0.355, 0.425], ramps: [0.25, 0.76],
     extras: { weather: 'rain', hazard: 'barrel', life: 'birds', liquidMode: 0, lamp: 0xff9a2a, deck: 0x9a6a3a, tunnelCol: 0x6f7f6a, tunnelGlow: 0xffd98a, puddle: 0x8fdcff, mark: 0x15151c },
   },
   {
@@ -71,7 +72,8 @@ export const TRACKS = [
       fx: 'bubbles', fxColor: 0xffffff, hills: 16, mountains: 0x35c2a8, clouds: 0xffffff,
     },
     music: { tempo: 124, root: 60, scale: 'major', prog: [0, 4, 5, 3], seed: 8 , style: 'beach' },
-    elev: [[2, 8], [5, 4]], tunnel: [0.84, 0.9], bridge: [0.105, 0.175], ramps: [0.25, 0.635],
+    hills: [[0, 0], [0.07, 2], [0.14, 5], [0.2, 7], [0.3, 1.2], [0.455, 1.5], [0.5, 4], [0.55, 3], [0.575, 0.8], [0.72, 3], [0.76, 5], [0.82, 6], [0.9, 5], [0.95, 2], [1, 0]],
+    boat: [0.59, 0.68], glide: [0.22, 0.28, 9, 2], sub: [0.315, 0.445, 0.04, 6], tunnel: [0.84, 0.9], bridge: [0.105, 0.175], ramps: [0.5, 0.76],
     extras: { weather: 'none', hazard: 'crab', life: 'birds', liquidMode: 0, lamp: 0xff5ec4, deck: 0xc79a5a, tunnelCol: 0xd9b98a, tunnelGlow: 0xfff0b0, puddle: 0x9ff0ff, mark: 0x2a2220 },
   },
   {
@@ -86,7 +88,8 @@ export const TRACKS = [
       fx: 'embers', fxColor: 0xffa23a, hills: 34, mountains: 0x4a1a2e, clouds: 0x7a3a4a, propGlow: 0xff5a1a,
     },
     music: { tempo: 140, root: 52, scale: 'minor', prog: [0, 5, 3, 4], seed: 5 , style: 'volcano' },
-    elev: [[1, 18], [4, 8]], tunnel: [0.355, 0.43], bridge: [0.6, 0.68], ramps: [0.135, 0.87],
+    hills: [[0, 0], [0.06, 1.5], [0.25, 8], [0.33, 14], [0.4, 16], [0.455, 20], [0.6, 11], [0.64, 12], [0.7, 10], [0.76, 6], [0.795, 1.8], [0.96, 0.6], [1, 0]],
+    boat: [0.1, 0.17], glide: [0.475, 0.53, 22, 9], sub: [0.812, 0.918, 0.036, 5.5], tunnel: [0.355, 0.43], bridge: [0.6, 0.68], ramps: [0.25, 0.76],
     extras: { weather: 'ash', hazard: 'geyser', life: null, liquidMode: 1, lamp: 0xff6a1a, deck: 0x4a3a44, tunnelCol: 0x3a2630, tunnelGlow: 0xff7a1a, puddle: null, mark: 0x0c0a0e },
   },
   {
@@ -101,7 +104,8 @@ export const TRACKS = [
       fx: 'snow', fxColor: 0xffffff, hills: 38, mountains: 0xb8dcff, clouds: 0xffffff,
     },
     music: { tempo: 128, root: 62, scale: 'major', prog: [0, 5, 3, 4], seed: 12 , style: 'ice' },
-    elev: [[2, 14], [3, 10]], tunnel: [0.105, 0.175], bridge: [0.84, 0.9], ramps: [0.38, 0.635],
+    hills: [[0, 0], [0.08, 3], [0.14, 5], [0.2, 6], [0.25, 5], [0.3, 1.5], [0.455, 2], [0.55, 1.2], [0.72, 3], [0.76, 6], [0.82, 9], [0.87, 10], [0.93, 5], [0.97, 1.5], [1, 0]],
+    boat: [0.585, 0.675], glide: [0.475, 0.53, 6, 1.5], sub: [0.315, 0.445, 0.04, 6], tunnel: [0.105, 0.175], bridge: [0.84, 0.9], ramps: [0.25, 0.76],
     extras: { weather: 'blizzard', hazard: 'penguin', life: null, liquidMode: 0, lamp: 0x7fe0ff, deck: 0xbfe6ff, tunnelCol: 0x9fd6ff, tunnelGlow: 0xcff4ff, puddle: 0xe6f8ff, mark: 0x26304a },
   },
   {
@@ -117,7 +121,8 @@ export const TRACKS = [
       propGlow: 0xff2fd0, neon: true,
     },
     music: { tempo: 138, root: 55, scale: 'minor', prog: [0, 3, 5, 4], seed: 21 , style: 'neon' },
-    elev: [[3, 10], [1, 6]], tunnel: [0.6, 0.69], bridge: [0.355, 0.425], ramps: [0.14, 0.25, 0.87],
+    hills: [[0, 0], [0.06, 1.5], [0.3, 3], [0.39, 8], [0.455, 6], [0.5, 7], [0.55, 6], [0.64, 9], [0.7, 8], [0.76, 6], [0.795, 1.8], [0.96, 0.6], [1, 0]],
+    boat: [0.105, 0.17], glide: [0.22, 0.28, 8, 2.5], sub: [0.812, 0.918, 0.036, 5.5], tunnel: [0.6, 0.69], bridge: [0.355, 0.425], ramps: [0.5, 0.76],
     extras: { weather: 'none', hazard: 'drone', life: 'beams', liquidMode: 2, lamp: 0x00f0ff, deck: 0x2a1a6a, tunnelCol: 0x1a1240, tunnelGlow: 0xff2fd0, puddle: null, mark: 0x00c8e0 },
   },
   {
@@ -133,7 +138,8 @@ export const TRACKS = [
       rainbow: true, propGlow: 0xffffff,
     },
     music: { tempo: 144, root: 59, scale: 'major', prog: [0, 4, 5, 3], seed: 30 , style: 'temple' },
-    elev: [[2, 16], [5, 7]], tunnel: [0.105, 0.165], bridge: [0.6, 0.68], ramps: [0.25, 0.39, 0.87],
+    hills: [[0, 0], [0.08, 3], [0.135, 6], [0.2, 8], [0.25, 7], [0.3, 1.5], [0.455, 2], [0.57, 6], [0.64, 10], [0.7, 9], [0.76, 6], [0.815, 1.0], [0.96, 0.8], [1, 0]],
+    boat: [0.83, 0.9], glide: [0.475, 0.53, 6, 2.5], sub: [0.315, 0.445, 0.04, 6], tunnel: [0.105, 0.165], bridge: [0.6, 0.68], ramps: [0.25, 0.76],
     extras: { weather: 'stars', hazard: 'star', life: null, liquidMode: 3, lamp: 0xffe600, deck: 0xffffff, tunnelCol: 0xd0a8ff, tunnelGlow: 0xffffff, puddle: null, mark: 0xffffff },
   },
 ];

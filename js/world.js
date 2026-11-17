@@ -145,7 +145,7 @@ export class Weather {
   }
 
   update(dt, t, cam, race) {
-    const tr = this.track, p = race.player, inTunnel = tr.samples[p.idx].tun, racing = race.state === 'racing';
+    const tr = this.track, p = race.player, inTunnel = tr.samples[p.idx].tun || cam.y < tr.liquidLevel, racing = race.state === 'racing';
     const k = this.kind;
     if (k === 'rain') {
       const lv = this.level = clamp(Math.sin(t * 0.07 - 0.6) * 1.7 - 0.1, 0, 1);
@@ -183,7 +183,7 @@ export class Weather {
           const m = this.meteors.find(q => q.state === 0);
           const r = Math.random() < 0.55 ? p : race.racers[Math.floor(Math.random() * race.racers.length)];
           const idx = (r.idx + 16 + Math.floor(Math.random() * 22)) % tr.N, s = tr.samples[idx];
-          if (m && !s.tun) {
+          if (m && !s.tun && !s.zone && s.kz < 0.02) {
             const lat = (Math.random() - 0.5) * 2 * (tr.hw - 1);
             m.x = s.x + s.nx * lat; m.z = s.z + s.nz * lat; m.y = s.y; m.state = 1; m.t = 0;
             m.rock.visible = m.ring.visible = true; m.ring.position.set(m.x, m.y + 0.09, m.z); m.ring.material.color.setRGB(1, 0.2, 0.08);
@@ -319,4 +319,27 @@ export class Hazards {
   }
 
   dispose() { for (const h of this.list) { this.scene.remove(h.holder); if (h.disc) { h.disc.geometry.dispose(); h.disc.material.dispose(); } } }
+}
+
+// ---------------- Ambiente submarino ----------------
+// Cuando la cámara baja de la superficie: niebla del color del líquido, luz tenue, burbujas y montañas ocultas.
+export class Underwater {
+  constructor({ scene, track, fx }) {
+    this.scene = scene; this.track = track; this.fx = fx; this.on = false;
+    this.col = new THREE.Color(track.def.theme.liquid).multiplyScalar(0.5).lerp(new THREE.Color(0x06245a), 0.35);
+    this.baseCol = track.fog.color.clone(); this.baseBg = scene.background ? scene.background.clone() : null;
+  }
+
+  update(dt, cam) {
+    const tr = this.track, sub = cam.y < tr.liquidLevel - 0.15;
+    if (sub) {
+      tr.fog.color.copy(this.col); tr.fog.near = 5; tr.fog.far = 135; if (this.baseBg) this.scene.background.copy(this.col);
+      tr.setLight(0.5);
+      for (let i = 0; i < 2; i++) this.fx.norm.emit(cam.x + (Math.random() - 0.5) * 44, cam.y - 5 + Math.random() * 6, cam.z + (Math.random() - 0.5) * 44, (Math.random() - 0.5) * 0.6, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 0.6, 0xdff8ff, 3 + Math.random() * 5, 2.2, -0.8);
+    } else if (this.on) {
+      tr.fog.color.copy(this.baseCol); tr.fog.near = tr.baseFog[0]; tr.fog.far = tr.baseFog[1]; if (this.baseBg) this.scene.background.copy(this.baseBg);
+      tr.setLight(0);
+    }
+    if (sub !== this.on) { this.on = sub; if (tr.farMesh) tr.farMesh.visible = !sub; }
+  }
 }

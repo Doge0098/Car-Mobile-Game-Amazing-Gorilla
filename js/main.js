@@ -7,7 +7,8 @@ import { initInput, input, pollInput, consumePresses, enableTilt } from './input
 import { buildTrack } from './track.js';
 import { Race } from './race.js';
 import { Particles, Ambient } from './fx.js';
-import { makeGorilla, makeKart, animateGorilla, animateKart, blobShadow } from './models.js';
+import { makeGorilla, makeKart, mountGorilla, animateGorilla, animateKart, blobShadow } from './models.js';
+import { setOutline, setOutlineRes } from './outline.js';
 import { Post } from './post.js';
 import { Podium } from './podium.js';
 
@@ -39,6 +40,7 @@ function resize() {
   camera.aspect = w / h; camera.updateProjectionMatrix();
   menuCam.aspect = w / h; placeShow(); applyShowOffset();
   if (usePost()) post.setSize(q === 'alta' ? 4 : 0); else if (post.supported) post.disposeTargets();
+  const db = renderer.getDrawingBufferSize(new THREE.Vector2()); setOutlineRes(db.x, db.y); setOutline(save.settings.outline !== false);
   menuRing.material.color.set(0x22e6ff).multiplyScalar(usePost() ? 2.2 : 1);
 }
 
@@ -80,7 +82,7 @@ function setShowModel(charId, kartId, colorIdx) {
   if (showModel) menuScene.remove(showModel);
   showModel = new THREE.Group();
   showKart = makeKart(kartById(kartId), KART_COLORS[colorIdx] || null);
-  showGorilla = makeGorilla(charById(charId)); showGorilla.position.set(0, 0.52, -0.5); showGorilla.scale.setScalar(0.95);
+  showGorilla = mountGorilla(showKart, makeGorilla(charById(charId)));
   showModel.add(showKart, showGorilla, blobShadow());
   menuScene.add(showModel);
 }
@@ -140,7 +142,7 @@ function startRace(trackId) {
     disposeRace();
     currentTrack = trackById(trackId);
     const q = qualityK();
-    const gfx = { quality: q, bloom: usePost(), shadows: !!save.settings.shadows };
+    const gfx = { quality: q, bloom: usePost(), shadows: !!save.settings.shadows, outline: save.settings.outline !== false };
     renderer.shadowMap.enabled = gfx.shadows;
     track = buildTrack(currentTrack, gfx);
     raceScene = new THREE.Scene();
@@ -189,6 +191,7 @@ function onRaceEvent(ev, data) {
   else if (ev === 'stall') { setTimeout(() => hudMsg('¡Demasiado pronto!', true), 650); sfx.stall?.(); }
   else if (ev === 'ramp') { if (rampHints++ < 2) hint('¡Pulsa DERRAPE en el aire para hacer un truco!'); }
   else if (ev === 'trick') hudMsg('¡Truco! 🌀', true);
+  else if (ev === 'mode') hudMsg({ glide: '¡Ala delta! 🪂', boat: '¡Al agua! 🚤', sub: '¡Inmersión! 🤿' }[data], true);
   else if (ev === 'lap') { hudMsg('Vuelta ' + data, true); sfx.lap(); sfx.crowd?.(0, 0.7); }
   else if (ev === 'finalLap') { hudMsg('¡Última vuelta!', true); sfx.finalLap(); A.setMusicIntensity?.(1); sfx.crowd?.(0, 0.9); }
   else if (ev === 'lightning') { flash(true); setTimeout(() => sfx.thunder?.(), 380); }
@@ -477,7 +480,7 @@ function buildSettings() {
   };
   seg('set-controls', 'controls');
   // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
-  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; persist(); resize(); buildSettings(); });
+  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; s.outline = s.quality !== 'baja'; persist(); resize(); buildSettings(); });
   const flag = (id, key, after) => {
     $(id).querySelectorAll('button').forEach(b => {
       const v = b.dataset.v === '1';
@@ -485,7 +488,8 @@ function buildSettings() {
       b.onclick = () => { s[key] = v; persist(); sfx.ui(); buildSettings(); if (after) after(); };
     });
   };
-  flag('set-bloom', 'bloom', resize); flag('set-shadows', 'shadows');
+  if (s.outline == null) s.outline = true;
+  flag('set-outline', 'outline', resize); flag('set-bloom', 'bloom', resize); flag('set-shadows', 'shadows');
   flag('set-haptics', 'haptics', () => { A.setHaptics?.(!!s.haptics); A.haptic?.('hit'); });
   $('set-bloom').classList.toggle('off', !post.supported);
   $('set-music').value = s.music; $('set-sfx').value = s.sfx;
@@ -569,7 +573,7 @@ function frame(now) {
       race.lateUpdate(dt, camera);
       fxAdd.update(dt, ps); fxNorm.update(dt, ps);
       const p = race.player, tun = track.samples[p.idx].tun;
-      ambient.points.visible = !tun;
+      ambient.points.visible = !tun && !race.underwater.on;
       ambient.update(race.t, camera.position);
       // sonido continuo: motor propio, rivales cercanos, clima y eco del túnel
       updateEngine(Math.min(1.3, Math.abs(p.speed) / p.maxSpeed), p.drifting && p.hopY < 0.1, p.boostT > 0);
@@ -577,7 +581,8 @@ function frame(now) {
         const n = race.rivalAudio(rivalBuf); rivalOut.length = 0; for (let i = 0; i < n; i++) rivalOut.push(rivalBuf[i]);
         A.updateRivalEngines?.(rivalOut);
         A.setAmbienceLevel?.(race.weather.level);
-        if (tun !== inTunnel) { inTunnel = tun; A.setTunnel?.(tun); }
+        const muffled = tun || race.underwater.on;
+        if (muffled !== inTunnel) { inTunnel = muffled; A.setTunnel?.(muffled); }
         updateHud(dt);
         if (finishTimer > 0) { finishTimer -= dt; if (finishTimer <= 0) showResults(); }
         // aviso si el móvil no puede con los gráficos
@@ -618,4 +623,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, podium, post, save, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, podium, post, save, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };

@@ -11,7 +11,7 @@ const defaults = () => ({
   trophies: {},      // cupId_diff -> 1,2,3
   best: {},          // trackId -> mejor tiempo contrarreloj (s)
   ghosts: {},        // trackId -> array plano [x,z,h,...]
-  settings: { controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, haptics: true },
+  settings: { controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, outline: true, haptics: true },
 });
 
 export let save = defaults();
@@ -23,6 +23,9 @@ export function loadSave() {
       const d = JSON.parse(raw);
       const base = defaults();
       save = { ...base, ...d, settings: { ...base.settings, ...(d.settings || {}) } };
+    } else if ((navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4)) {
+      // primera vez en un móvil modesto: se empieza con gráficos medios y sin sombras
+      save.settings.quality = 'media'; save.settings.shadows = false;
     }
   } catch (e) { save = defaults(); }
   return save;

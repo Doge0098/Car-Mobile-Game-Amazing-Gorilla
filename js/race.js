@@ -2,8 +2,9 @@
 import * as THREE from './vendor/three.module.min.js';
 import * as A from './audio.js';
 import { CHARACTERS, KARTS, LAPS, RACERS, charById, kartById, KART_COLORS, rng } from './data.js';
-import { makeGorilla, makeKart, animateGorilla, animateKart, blobShadow, toon, makeHazard } from './models.js';
-import { SkidMarks, Trail, Weather, Hazards } from './world.js';
+import { makeGorilla, makeKart, mountGorilla, makeModeRigs, animateGorilla, animateKart, blobShadow, toon, makeHazard } from './models.js';
+import { addOutline } from './outline.js';
+import { SkidMarks, Trail, Weather, Hazards, Underwater } from './world.js';
 
 const sfx = A.sfx;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -27,7 +28,7 @@ class Racer {
     this.boostT = 0; this.spinT = 0; this.shieldT = 0; this.furyT = 0; this.poundT = 0;
     this.shrinkT = 0; this.magnetT = 0; this.stallT = 0;
     this.hopY = 0; this.hopV = 0; this.air = false; this.trickT = 0; this.trickDone = false; this.trickDir = 1; this.rampCd = 0; this.aiTrick = -1;
-    this.lat = 0; this.off = false; this.inPuddle = false;
+    this.lat = 0; this.off = false; this.inPuddle = false; this.mode = null; this.modeT = 0; this.bob = 0;
     this.item = null; this.itemCount = 0; this.rolling = 0; this.useDelay = 0;
     this.bananas = 0; this.finished = false; this.finishTime = 0; this.pos = slot + 1; this.prevPos = 0;
     this.wrongT = 0; this.t = Math.random() * 10; this.bumpCd = 0; this.sizeK = 1;
@@ -41,9 +42,11 @@ class Racer {
     this.pitchG = new THREE.Group(); this.root.add(this.pitchG);
     this.tilt = new THREE.Group(); this.pitchG.add(this.tilt);
     this.kart = makeKart(kart, color); this.tilt.add(this.kart);
-    this.gorilla = makeGorilla(char); this.gorilla.position.set(0, 0.52, -0.5); this.gorilla.scale.setScalar(0.95);
+    this.gorilla = mountGorilla(this.kart, makeGorilla(char));
     this.tilt.add(this.gorilla);
-    if (race.shadows) this.tilt.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.rigs = makeModeRigs(); this.tilt.add(this.rigs.glider, this.rigs.boat, this.rigs.sub);
+    this.outlines = []; this.olOn = true; this.tilt.traverse(o => { if (o.userData.isOutline) this.outlines.push(o); });
+    if (race.shadows) this.tilt.traverse(o => { if (o.isMesh && !o.userData.isOutline && !o.material.transparent) o.castShadow = true; });
     this.shadow = blobShadow(); this.pitchG.add(this.shadow);
     this.shadow.visible = !race.shadows || tr.unlitRoad;
     this.shield = new THREE.Mesh(race.shieldGeo, race.shieldMat); this.shield.position.y = 1.3; this.shield.visible = false;
@@ -68,6 +71,7 @@ class Racer {
     this.bananas = Math.max(0, this.bananas - 3);
     fx.add.burst(this.x, this.y + 1.5, this.z, 26, [0xffe21f, 0xffffff, 0xff5a3c], 11, 8, 0.7, 12);
     if (this.isPlayer) { sfx.hit(); race.shake = 0.5; A.haptic?.('hit'); } else if (this.near()) sfx.bump();
+    if (this.isPlayer || this.near()) race.shock(this.x, this.y + 1.2, this.z, 0xff5a3c, 6);
     race.voice(this, this.shrinkT > 0 ? 'tiny' : 'hit');
     return true;
   }
@@ -81,13 +85,14 @@ class Racer {
     this.lookCd -= dt;
     const spinning = this.spinT > 0;
     if (spinning) this.spinT -= dt;
-    const air = this.hopY > 0.05;
+    const s0 = tr.samples[this.idx], mode = this.mode, gliding = mode === 'glide';
+    const air = this.hopY > 0.05 && !gliding;
 
-    const s0 = tr.samples[this.idx];
     let fxd = Math.sin(this.h), fzd = Math.cos(this.h);
     this.slopeF = s0.slope * (fxd * s0.tx + fzd * s0.tz);
     let max = this.maxSpeed * (ctl.maxK || 1) * (1 + Math.min(this.bananas, 10) * 0.006) * clamp(1 - this.slopeF * 0.9, 0.86, 1.14);
     if (this.off && !air && this.furyT <= 0 && this.boostT <= 0) max *= 0.5;
+    if (gliding) max *= 1.08; else if (mode === 'sub') max *= 0.97;
     if (this.furyT > 0) max *= 1.16;
     if (this.boostT > 0) max *= 1.36;
     if (this.shrinkT > 0) max *= 0.72;
@@ -106,7 +111,7 @@ class Racer {
     const steer = spinning ? 0 : clamp(ctl.steer, -1, 1);
     this.steer += (steer - this.steer) * Math.min(1, dt * 12);
     if (!this.drifting) {
-      if (ctl.drift && !spinning && !air && Math.abs(steer) > 0.25 && this.speed > 24) {
+      if (ctl.drift && !spinning && !air && !gliding && Math.abs(steer) > 0.25 && this.speed > 24) {
         this.drifting = true; this.driftDir = Math.sign(steer); this.charge = 0; this.hopV = 4.2;
       }
     } else {
@@ -130,19 +135,21 @@ class Racer {
     // giro
     let yaw;
     if (air) yaw = steer * this.turnRate * 0.3;
+    else if (gliding) yaw = steer * this.turnRate * 0.75;
     else if (this.drifting) yaw = (this.driftDir * 0.72 + steer * 0.58) * this.turnRate * 1.05;
     else yaw = steer * this.turnRate * clamp(this.speed / 16, -1, 1) * (1 - 0.18 * clamp(this.speed / max, 0, 1));
     this.h -= yaw * dt;
 
     // velocidad con agarre (permite deslizar)
     fxd = Math.sin(this.h); fzd = Math.cos(this.h);
-    let g = air ? 1.0 : this.drifting ? 2.7 : this.grip; if (this.off && !air) g *= 0.7;
+    let g = air ? 1.0 : gliding ? 2.4 : this.drifting ? 2.7 : mode === 'boat' ? 3.2 : mode === 'sub' ? 4.6 : this.grip; if (this.off && !air) g *= 0.7;
     const k = Math.min(1, g * dt);
     this.vx += (fxd * this.speed - this.vx) * k; this.vz += (fzd * this.speed - this.vz) * k;
     this.x += this.vx * dt; this.z += this.vz * dt;
 
-    // salto
-    if (this.hopY > 0 || this.hopV > 0) {
+    // salto (en el ala delta la altura la marca el tramo)
+    if (gliding) { this.hopV = 0; this.air = false; }
+    else if (this.hopY > 0 || this.hopV > 0) {
       this.hopV -= 30 * dt; this.hopY += this.hopV * dt;
       if (this.hopY <= 0) {
         this.hopY = 0; this.hopV = 0;
@@ -172,11 +179,28 @@ class Racer {
       if (vn * sg > 0) { this.vx -= s.nx * vn; this.vz -= s.nz * vn; }
       this.speed -= this.speed * 1.2 * dt;
     }
-    this.lat = lat; this.off = Math.abs(lat) > tr.hw + 1.6;
+    this.lat = lat; this.off = Math.abs(lat) > tr.hw + 1.6 && !s.zone;
     this.y = tr.yAt(this.x, this.z, ni);
+    // transformación automática según el tramo
+    if (s.zone !== this.mode) race.setMode(this, s.zone);
+    if (s.zone === 'glide') {
+      const nx = tr.samples[(ni + 1) % N], fr = clamp(((this.x - s.x) * s.tx + (this.z - s.z) * s.tz) / tr.spacing, 0, 1);
+      this.hopY += (s.air + (nx.air - s.air) * fr - this.hopY) * Math.min(1, dt * 12);
+    }
+    // aros de impulso
+    for (const rg of tr.rings) {
+      if (rg.cd[this.slot] > 0) { rg.cd[this.slot] -= dt; continue; }
+      let di = ni - rg.idx; if (di < -N / 2) di += N;
+      if (di >= 0 && di <= 1 && Math.abs(lat - rg.lat) < 3.4) {
+        rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++;
+        fx.add.burst(rg.x, rg.y, rg.z, 22, [0xffd21f, 0xffffff, 0x22e6ff], 12, 9, 0.5);
+        race.shock(rg.x, rg.y, rg.z, 0xffffff, 9, 0.4);
+        if (this.isPlayer) { sfx.trick?.(); A.haptic?.('boost'); race.emit('ring'); }
+      }
+    }
 
     // rampas
-    if (this.rampCd <= 0 && this.hopY <= 0.01 && this.speed > 18 && !spinning) {
+    if (this.rampCd <= 0 && this.hopY <= 0.01 && this.speed > 18 && !spinning && !s.zone) {
       for (const rp of tr.ramps) {
         let di = ni - rp.idx; if (di < -N / 2) di += N;
         if (di >= 0 && di <= 2 && Math.abs(lat) < tr.hw - 0.4) {
@@ -228,6 +252,7 @@ class Racer {
         b.active = false; b.timer = 3.5; b.mesh.visible = false;
         fx.add.burst(b.x, b.y + 1.5, b.z, 22, [0xff4fd8, 0xffd21f, 0x22e6ff, 0xffffff], 10, 8, 0.5, 8);
         if (!this.item && this.rolling <= 0 && !this.finished) { this.rolling = 1.3; }
+        if (this.isPlayer || this.near()) race.shock(b.x, b.y + 1.5, b.z, 0xffe45a, 4.5);
         if (this.isPlayer) sfx.tick();
       }
     }
@@ -257,7 +282,15 @@ class Racer {
     ty.y += wrapA(yawOff - ty.y) * Math.min(1, dt * (fast ? 30 : 9));
     ty.z += ((this.drifting ? -this.driftDir * 0.1 : -this.steer * 0.05) - ty.z) * Math.min(1, dt * 8);
     ty.x = -this.hopV * 0.012 - (this.boostT > 0 ? 0.06 : 0);
-    this.tilt.position.y = this.hopY;
+    // modo de vehículo: aparición de accesorios, flotación y hélice
+    const md = this.mode; this.modeT = Math.min(1, this.modeT + dt * 5);
+    const pop = 0.6 + 0.4 * Math.sin(this.modeT * Math.PI / 2) + (this.modeT < 1 ? Math.sin(this.modeT * Math.PI) * 0.25 : 0);
+    if (md) this.rigs[md === 'glide' ? 'glider' : md].scale.setScalar(pop);
+    this.bob += ((md === 'boat' ? -0.32 + Math.sin(t * 3.2 + this.ph) * 0.1 : md === 'sub' ? 0.75 + Math.sin(t * 2 + this.ph) * 0.18 : 0) - this.bob) * Math.min(1, dt * 6);
+    if (md === 'sub') this.rigs.prop.rotation.z += dt * (6 + this.speed * 0.5);
+    if (md === 'glide') ty.z += (-this.steer * 0.38 - ty.z) * Math.min(1, dt * 6);
+    else if (md === 'boat') { ty.z += Math.sin(t * 2.6 + this.ph) * 0.0015; ty.x += Math.sin(t * 3.2 + this.ph) * 0.03; }
+    this.tilt.position.y = this.hopY + this.bob;
     const targetSize = this.furyT > 0 ? 1.38 : this.shrinkT > 0 ? 0.55 : 1;
     this.sizeK += (targetSize - this.sizeK) * Math.min(1, dt * 6);
     this.tilt.scale.setScalar(this.sizeK);
@@ -265,6 +298,11 @@ class Racer {
     this.shield.visible = this.shieldT > 0;
     if (this.shield.visible) { this.shield.rotation.y = t * 2; this.shield.scale.setScalar(1 + Math.sin(t * 8) * 0.04); }
 
+    // la cara solo se anima de cerca o en las presentaciones
+    const camD = (race.camPos.x - this.x) ** 2 + (race.camPos.z - this.z) ** 2;
+    this.gorilla.userData.face.visible = camD < 55 * 55;
+    // el contorno de los coches lejanos no se dibuja
+    const ol = camD < 85 * 85; if (ol !== this.olOn) { this.olOn = ol; for (const o of this.outlines) o.visible = ol; }
     // expresión y animación del gorila
     let mode = 'drive', face = 'neutral';
     if (this.spinT > 0) { mode = 'dizzy'; face = 'dizzy'; }
@@ -296,17 +334,24 @@ class Racer {
     const ground = this.hopY < 0.1;
     const rear = (side, back = 1.4) => [this.x - f[0] * back + l[0] * side * 1.15, this.z - f[1] * back + l[1] * side * 1.15];
     // marcas de derrape y rodadas fuera de pista
-    const marking = ground && ((this.drifting && !this.off) || (this.off && this.speed > 14) || (this.spinT > 0 && this.speed > 10));
+    if (md === 'boat' && this.speed > 8) {
+      // estela de espuma y salpicaduras
+      for (const sd of [-1, 1]) if (Math.random() < 0.8) { const [px, pz] = rear(sd * 1.2, 1.6); fx.norm.emit(px, y + 0.15, pz, l[0] * sd * 3 + (Math.random() - 0.5) * 2, 2.5 + Math.random() * 3, l[1] * sd * 3 + (Math.random() - 0.5) * 2, 0xffffff, 9, 0.55, 12, 0.8); }
+    } else if (md === 'sub' && Math.random() < 0.7) {
+      const [px, pz] = rear((Math.random() - 0.5) * 0.8, 3.2);
+      fx.norm.emit(px, y + this.bob + 0.9, pz, (Math.random() - 0.5) * 1.5, 2.2 + Math.random() * 2, (Math.random() - 0.5) * 1.5, 0xdff8ff, 5 + Math.random() * 5, 1.1, -1.5);
+    }
+    const marking = ground && (md === 'boat' ? this.speed > 8 : !md && ((this.drifting && !this.off) || (this.off && this.speed > 14) || (this.spinT > 0 && this.speed > 10)));
     for (let i = 0; i < 2; i++) {
       const m = this.mk[i], [px, pz] = rear(i ? 1 : -1, 1.2);
       if (!marking) { m.on = false; continue; }
       if (!m.on) { m.on = true; m.x = px; m.y = y; m.z = pz; continue; }
       if ((px - m.x) ** 2 + (pz - m.z) ** 2 > 1.4) {
-        race.marks.add(m.x, m.y, m.z, px, y, pz, 0.3, this.off ? race.rutColor : race.markColor, t);
+        race.marks.add(m.x, m.y, m.z, px, y, pz, md === 'boat' ? 0.5 : 0.3, md === 'boat' ? 0xffffff : this.off ? race.rutColor : race.markColor, t);
         m.x = px; m.y = y; m.z = pz;
       }
     }
-    if (this.drifting && ground) {
+    if (this.drifting && ground && !md) {
       const lvl = this.driftLevel(), c = DRIFT_COLORS[lvl];
       for (const sd of [-1, 1]) {
         const [px, pz] = rear(sd);
@@ -342,7 +387,8 @@ export class Race {
     Object.assign(this, opts); // scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent...
     const tr = this.track, def = tr.def, ex = def.extras;
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
-    this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = [];
+    this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = []; this.shocks = [];
+    this.windColor = def.theme.fxColor;
     this.camPos = new THREE.Vector3(); this.camH = 0; this.fov = 70; this.countShown = 4; this.camY = 0;
     this.pressT = -99; this.goWindow = 0; this.prevDrift = false; this.voiceCd = 0;
     this.glowK = this.bloom ? 1.5 : 1;
@@ -376,6 +422,7 @@ export class Race {
     // en contrarreloj no hay obstáculos ni meteoritos: la vuelta debe depender solo del piloto
     this.hazards = new Hazards(solo ? null : ex.hazard, wOpts);
     this.weather = new Weather(solo && ex.weather === 'ash' ? 'none' : ex.weather, wOpts);
+    this.underwater = new Underwater(wOpts);
     if (solo) {
       this.player.item = 'turbo'; this.player.itemCount = 3;
       for (const b of tr.itemBoxes) { b.active = false; b.timer = 1e9; b.mesh.visible = false; }
@@ -383,9 +430,8 @@ export class Race {
       if (this.ghostData && this.ghostData.length > 6) {
         const gm = new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.32, depthWrite: false });
         this.ghost = new THREE.Group(); this.ghostIdx = this.player.idx;
-        this.ghost.add(makeKart(pk, null, gm));
-        const gg = makeGorilla(pc, gm); gg.position.set(0, 0.52, -0.5); gg.scale.setScalar(0.95);
-        animateGorilla(gg, 0, {}); this.ghost.add(gg);
+        const gk = makeKart(pk, null, gm), gg = mountGorilla(gk, makeGorilla(pc, gm));
+        animateGorilla(gg, 0, {}); this.ghost.add(gk, gg);
         this.scene.add(this.ghost);
       }
     }
@@ -404,6 +450,27 @@ export class Race {
     if (this.voiceCd > 0 || !r.near()) return;
     this.voiceCd = 0.45;
     A.voice(kind, pitch, this.panOf(r.x, r.z), vol * 0.55);
+  }
+
+  // Transformación del coche al entrar o salir de un tramo especial
+  setMode(r, mode) {
+    const prev = r.mode; r.mode = mode || null; r.modeT = 0;
+    r.rigs.glider.visible = mode === 'glide'; r.rigs.boat.visible = mode === 'boat'; r.rigs.sub.visible = mode === 'sub';
+    for (const w of r.kart.userData.wheels) {
+      const sg = Math.sign(w.x);
+      w.pivot.visible = mode !== 'sub';
+      w.pivot.rotation.z = mode === 'boat' ? -sg * Math.PI / 2 : 0;
+      w.pivot.position.set(mode === 'boat' ? w.x - sg * 0.1 : w.x, mode === 'boat' ? w.y + 0.75 : w.y, w.pivot.position.z);
+    }
+    if (prev === 'glide' && !mode) { r.hopY = 0; this.fx.norm.burst(r.x, r.y + 0.3, r.z, 12, this.dustColor, 7, 12, 0.5, 3); if (r.isPlayer) { sfx.land?.(); A.haptic?.('land'); } }
+    r.drifting = false; r.charge = 0;
+    const near = r.isPlayer || r.near();
+    this.fx.add.burst(r.x, r.y + r.hopY + 1.2, r.z, 20, [0xffffff, 0x22e6ff, 0xffd21f], 10, 9, 0.45);
+    if (mode === 'boat' || mode === 'sub' || prev === 'boat' || prev === 'sub') {
+      this.fx.norm.burst(r.x, r.y + 0.4, r.z, 18, 0xffffff, 9, 10, 0.7, 14);
+      if (near) sfx.splash?.(r.isPlayer ? 0 : this.panOf(r.x, r.z), r.isPlayer ? 1 : 0.5);
+    } else if (mode === 'glide' && near) sfx.whoosh?.(r.isPlayer ? 0 : this.panOf(r.x, r.z), r.isPlayer ? 1 : 0.5);
+    if (r.isPlayer && mode) this.emit('mode', mode);
   }
 
   panOf(x, z) { return clamp(((x - this.camPos.x) * -Math.cos(this.camH) + (z - this.camPos.z) * Math.sin(this.camH)) / 18, -1, 1); }
@@ -443,13 +510,13 @@ export class Race {
       fx.add.burst(r.x, r.y + 1.5, r.z, 30, [0xc04dff, 0xff4fd8], 12, 10, 0.6);
     } else if (it === 'magnet') { r.magnetT = 8; if (loud) sfx.magnet?.(pan, vol); }
     else if (it === 'peel') {
-      const m = new THREE.Mesh(this.peelGeo, this.peelMat); m.castShadow = !!this.shadows;
+      const m = new THREE.Mesh(this.peelGeo, this.peelMat); m.castShadow = !!this.shadows; addOutline(m);
       const x = r.x - f[0] * 3.4, z = r.z - f[1] * 3.4; m.position.set(x, r.y + 0.3, z); this.scene.add(m);
       this.peels.push({ x, z, mesh: m, owner: r, age: 0 });
       if (this.peels.length > 14) { const o = this.peels.shift(); this.scene.remove(o.mesh); }
       r.throwT = THROW_T; if (loud) sfx.drop(pan, vol);
     } else if (it === 'coco') {
-      const m = new THREE.Mesh(this.cocoGeo, this.cocoMat); m.castShadow = !!this.shadows; this.scene.add(m);
+      const m = new THREE.Mesh(this.cocoGeo, this.cocoMat); m.castShadow = !!this.shadows; addOutline(m); this.scene.add(m);
       const ahead = this.racers.filter(o => o !== r && !o.finished && o.prog > r.prog).sort((a, b) => a.prog - b.prog)[0] || null;
       this.cocos.push({ prog: r.prog + 2, lat: r.lat, owner: r, target: ahead, life: 5.5, mesh: m });
       r.throwT = THROW_T; if (loud) sfx.throw(pan, vol); this.voice(r, 'grunt');
@@ -615,7 +682,7 @@ export class Race {
         if (rel < 0) { a.vx += dx * rel * 0.5; a.vz += dz * rel * 0.5; b.vx -= dx * rel * 0.5; b.vz -= dz * rel * 0.5; }
         if (a.furyT > 0 && b.furyT <= 0) b.hit(); else if (b.furyT > 0 && a.furyT <= 0) a.hit();
         else if (a.shrinkT > 0 && b.shrinkT <= 0 && b.speed > 30) a.hit(); else if (b.shrinkT > 0 && a.shrinkT <= 0 && a.speed > 30) b.hit();
-        else if ((a.isPlayer || b.isPlayer) && a.bumpCd <= 0 && b.bumpCd <= 0) { sfx.bump(); A.haptic?.('bump'); a.bumpCd = b.bumpCd = 0.4; }
+        else if ((a.isPlayer || b.isPlayer) && a.bumpCd <= 0 && b.bumpCd <= 0) { sfx.bump(); A.haptic?.('bump'); a.bumpCd = b.bumpCd = 0.4; this.shock((a.x + b.x) / 2, a.y + 1, (a.z + b.z) / 2, 0xffffff, 3.2, 0.25); }
       }
     }
 
@@ -632,7 +699,7 @@ export class Race {
     // cocos teledirigidos
     const posOn = (prog, lat, out) => {
       const fi = ((prog % N) + N) % N, i0 = Math.floor(fi), fr = fi - i0, a = S[i0], b = S[(i0 + 1) % N];
-      out.x = a.x + (b.x - a.x) * fr + a.nx * lat; out.z = a.z + (b.z - a.z) * fr + a.nz * lat; out.y = a.y + (b.y - a.y) * fr; out.s = a;
+      out.x = a.x + (b.x - a.x) * fr + a.nx * lat; out.z = a.z + (b.z - a.z) * fr + a.nz * lat; out.y = a.y + (b.y - a.y) * fr + a.air; out.s = a;
     };
     const q = this._q || (this._q = {});
     for (let i = this.cocos.length - 1; i >= 0; i--) {
@@ -735,7 +802,27 @@ export class Race {
   // tras mover la cámara: clima y marcas
   lateUpdate(dt, cam) {
     this.weather.update(dt, this.t, cam.position, this);
+    this.underwater.update(dt, cam.position);
     this.marks.update(this.t);
+    // anillos de impacto
+    for (let i = this.shocks.length - 1; i >= 0; i--) {
+      const w = this.shocks[i]; w.t += dt; const k = w.t / w.d;
+      w.mesh.scale.setScalar(0.4 + k * w.r); w.mesh.material.opacity = 0.9 * (1 - k); if (cam.quaternion) w.mesh.quaternion.copy(cam.quaternion);
+      if (k >= 1) { this.scene.remove(w.mesh); w.mesh.material.dispose(); this.shocks.splice(i, 1); }
+    }
+    // ráfagas que pasan junto a la cámara a gran velocidad
+    const p = this.player;
+    if (p.speed > p.maxSpeed * 0.9 && !this.underwater.on && Math.random() < 0.7) {
+      const f0 = Math.sin(p.h), f1 = Math.cos(p.h), d = 30 + Math.random() * 25, o = (Math.random() - 0.5) * 26;
+      this.fx.add.emit(p.x + f0 * d + f1 * o, p.y + p.hopY + 0.6 + Math.random() * 6, p.z + f1 * d - f0 * o, -f0 * 22, 0, -f1 * 22, this.windColor, 4 + Math.random() * 3, 0.7);
+    }
+  }
+
+  // anillo que se expande mirando a la cámara (recoger objeto, choque, aro)
+  shock(x, y, z, color, r = 5, d = 0.32) {
+    if (this.shocks.length > 10) return;
+    const m = new THREE.Mesh(this.waveGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(this.glowK), transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    m.position.set(x, y, z); this.scene.add(m); this.shocks.push({ mesh: m, t: 0, r, d });
   }
 
   // hasta 3 motores rivales para el sonido posicional (sin crear objetos por fotograma)
@@ -772,8 +859,8 @@ export class Race {
       const target = p.h + wrapA(vh - p.h) * 0.55;
       this.camH += wrapA(target - this.camH) * Math.min(1, dt * 5.5);
       const sk = clamp(p.speed / p.maxSpeed, 0, 1.4), d = (portrait ? 11.5 : 9) + sk * 1.2 - (p.boostT > 0 ? 0.8 : 0);
-      tx = p.x - Math.sin(this.camH) * d; tz = p.z - Math.cos(this.camH) * d; ty = by + (portrait ? 5.4 : 4.3) + p.hopY * 0.35 - p.slopeF * 4;
-      lx = p.x + Math.sin(this.camH) * 6; lz = p.z + Math.cos(this.camH) * 6; ly = by + 1.7 + p.slopeF * 6 + p.hopY * 0.25;
+      tx = p.x - Math.sin(this.camH) * d; tz = p.z - Math.cos(this.camH) * d; ty = by + (portrait ? 5.4 : 4.3) + p.hopY * (p.mode === 'glide' ? 0.9 : 0.35) + p.bob * 0.6 - p.slopeF * 4;
+      lx = p.x + Math.sin(this.camH) * 6; lz = p.z + Math.cos(this.camH) * 6; ly = by + 1.7 + p.slopeF * 6 + p.hopY * (p.mode === 'glide' ? 0.8 : 0.25) + p.bob * 0.6;
       fov = 66 + sk * 8 + (p.boostT > 0 ? 13 : 0);
     }
     cam.position.set(tx, ty, tz);

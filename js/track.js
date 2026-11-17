@@ -3,6 +3,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { rng } from './data.js';
 import { PROPS, canvasTex, glowTex, merged } from './models.js';
 import { buildScenery } from './scenery.js';
+import { outlineInstanced } from './outline.js';
 
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const TAU = Math.PI * 2;
@@ -74,8 +75,8 @@ export function buildTrack(def, opts = {}) {
   const pts = curve.getSpacedPoints(N); pts.pop();
   const hw = def.width / 2, spacing = length / N;
   const fIdx = u => ((Math.floor(u * N) % N) + N) % N;
-  const tunR = def.tunnel ? [fIdx(def.tunnel[0]), fIdx(def.tunnel[1])] : null;
-  const brR = def.bridge ? [fIdx(def.bridge[0]), fIdx(def.bridge[1])] : null;
+  const rng2 = r => (r ? [fIdx(r[0]), fIdx(r[1])] : null);
+  const tunR = rng2(def.tunnel), brR = rng2(def.bridge), boatR = rng2(def.boat), glR = rng2(def.glide), subR = rng2(def.sub);
   // factor de zona: 1 dentro del tramo y transición suave de E muestras fuera
   const zoneK = (i, r, E) => {
     if (!r) return 0;
@@ -83,20 +84,39 @@ export function buildTrack(def, opts = {}) {
     let d = i < r[0] ? r[0] - i : i - r[1]; d = Math.min(d, N - d);
     return 1 - smooth(0, E, d);
   };
+  // perfil de alturas: puntos de control unidos con una curva suave (pendiente cero en cada punto)
+  const WL = th.liquidLevel + 0.12, SUBY = def.sub ? th.liquidLevel - def.sub[3] : 0;
+  const cps = (def.hills || [[0, 0], [1, 0]]).map(q => q.slice());
+  if (def.boat) cps.push([def.boat[0] - 0.012, 0.6], [def.boat[0], WL], [def.boat[1], WL], [def.boat[1] + 0.015, 0.6]);
+  if (def.glide) cps.push([def.glide[0], def.glide[2]], [def.glide[1], def.glide[3]]);
+  if (def.sub) cps.push([def.sub[0], 1.0], [def.sub[0] + def.sub[2], SUBY], [def.sub[1] - def.sub[2], SUBY], [def.sub[1], 1.0]);
+  cps.sort((q, r) => q[0] - r[0]);
+  const profile = u => {
+    let k = 0; while (k < cps.length - 2 && u > cps[k + 1][0]) k++;
+    const [u0, y0] = cps[k], [u1, y1] = cps[k + 1], t = Math.max(0, Math.min(1, (u - u0) / (u1 - u0 || 1)));
+    return y0 + (y1 - y0) * (1 - Math.cos(Math.PI * t)) / 2;
+  };
+  const within = (i, r) => !!(r && i >= r[0] && i <= r[1]);
 
   const samples = [];
   for (let i = 0; i < N; i++) {
     const a = pts[(i + N - 1) % N], b = pts[(i + 1) % N];
     let tx = b.x - a.x, tz = b.z - a.z; const l = Math.hypot(tx, tz); tx /= l; tz /= l;
     const u = i / N;
-    let y = 0;
-    for (const [f, amp] of def.elev || []) y += amp * (1 - Math.cos(TAU * f * u)) / 2;
-    if (brR && i >= brR[0] && i <= brR[1]) y += 4.5 * Math.sin(Math.PI * (i - brR[0]) / (brR[1] - brR[0])) ** 2;
-    const kt = zoneK(i, tunR, 8), kb = zoneK(i, brR, 8);
+    let y = profile(u);
+    if (within(i, brR)) y += 4.5 * Math.sin(Math.PI * (i - brR[0]) / (brR[1] - brR[0])) ** 2;
+    const kt = zoneK(i, tunR, 8), kb = zoneK(i, brR, 8), kw = zoneK(i, boatR, 8), kg = zoneK(i, glR, 6);
+    const inBoat = within(i, boatR), inGl = within(i, glR);
+    let air = 0;
+    if (inGl) { const t = (i - glR[0]) / (glR[1] - glR[0]); air = Math.max(0, def.glide[2] + (def.glide[3] - def.glide[2]) * t + 7 * Math.sin(Math.PI * t) - y); }
     samples.push({
       x: pts[i].x, z: pts[i].z, y, tx, tz, nx: tz, nz: -tx, h: Math.atan2(tx, tz), curv: 0, slope: 0,
-      kt, kb, kbT: zoneK(i, brR, 16), tun: !!(tunR && i >= tunR[0] && i <= tunR[1]),
-      lim: hw + 8 - 5.6 * kt - 7.5 * kb,
+      kt, kb, kbT: zoneK(i, brR, 16), tun: within(i, tunR),
+      // modo de vehículo del tramo, hueco sin carretera, altura de vuelo y excavado del terreno
+      zone: inBoat ? 'boat' : inGl ? 'glide' : (within(i, subR) && y < th.liquidLevel - 1.2) ? 'sub' : null,
+      noRoad: inBoat || inGl, air, kz: Math.max(kw, kg, zoneK(i, subR, 4)),
+      carve: Math.max(zoneK(i, brR, 16), zoneK(i, boatR, 16), zoneK(i, glR, 16)), deep: zoneK(i, subR, 10),
+      lim: hw + 8 - 5.6 * kt - 7.5 * kb - 5 * kw - 3 * kg,
     });
   }
   let maxCurv = 0;
@@ -107,7 +127,7 @@ export function buildTrack(def, opts = {}) {
     samples[i].slope = (samples[(i + 1) % N].y - samples[(i + N - 1) % N].y) / (2 * spacing);
     maxCurv = Math.max(maxCurv, Math.abs(samples[i].curv));
   }
-  const special = s => s.kt > 0.02 || s.kb > 0.02; // túnel, puente o sus embudos
+  const special = s => s.kt > 0.02 || s.kb > 0.02 || s.kz > 0.02; // túnel, puente, tramos especiales o sus embudos
   const rampIdx = (def.ramps || []).map(fIdx);
   const nearRamp = i => rampIdx.some(r => { let d = Math.abs(i - r); d = Math.min(d, N - d); return d < 22; });
 
@@ -141,7 +161,7 @@ export function buildTrack(def, opts = {}) {
       if (th.rainbow) c.setHSL((i / N * 5) % 1, 0.9, 0.62); else c.setRGB(1, 1, 1);
       const k = th.neon ? B(1.7) : 1;
       col.push(c.r * k, c.g * k, c.b * k, c.r * k, c.g * k, c.b * k);
-      if (i < N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      if (i < N && !(s.noRoad && samples[(i + 1) % N].noRoad)) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
     }
     const g = own(new THREE.BufferGeometry());
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -161,12 +181,13 @@ export function buildTrack(def, opts = {}) {
     const kC = th.neon ? B(1.6) : 1;
     for (let i = 0; i < N; i++) {
       const s = samples[i], e = samples[(i + 1) % N], c = (i >> 1) % 2 ? ca : cb;
+      if (s.noRoad && e.noRoad) continue;
       for (const side of [1, -1]) {
         const i0 = hw * side, i1 = (hw + cw) * side;
         const p = [s.x + s.nx * i0, s.z + s.nz * i0, s.x + s.nx * i1, s.z + s.nz * i1, e.x + e.nx * i0, e.z + e.nz * i0, e.x + e.nx * i1, e.z + e.nz * i1];
         for (const k of [0, 2, 1, 1, 2, 3]) { pos.push(p[k * 2], (k < 2 ? s.y : e.y) + (k % 2 ? 0.1 : 0.03), p[k * 2 + 1]); col.push(c.r * kC, c.g * kC, c.b * kC); }
         // barrera / barandilla donde el borde se estrecha
-        if (s.lim < hw + 7.6 && !s.tun && !e.tun) {
+        if (s.lim < hw + 7.6 && !s.tun && !e.tun && !s.noRoad && !e.noRoad) {
           const l0 = (s.lim + 1.4) * side, l1 = (e.lim + 1.4) * side;
           const q = [s.x + s.nx * l0, s.y, s.z + s.nz * l0, e.x + e.nx * l1, e.y, e.z + e.nz * l1];
           const cc = (i >> 1) % 2 ? ca : cb;
@@ -198,7 +219,7 @@ export function buildTrack(def, opts = {}) {
           pos.push(s.x + s.nx * lat * side, s.y + dy, s.z + s.nz * lat * side); col.push(c.r * sh, c.g * sh, c.b * sh);
         }
       }
-      if (i < N) for (const o of [0, 3]) for (const j of [0, 1]) {
+      if (i < N && !(s.noRoad && samples[(i + 1) % N].noRoad)) for (const o of [0, 3]) for (const j of [0, 1]) {
         const v = i * 6 + o + j, w = v + 6; idx.push(v, v + 1, w, v + 1, w + 1, w);
       }
     }
@@ -216,10 +237,10 @@ export function buildTrack(def, opts = {}) {
     + Math.sin(x * 0.027 + z * 0.021 + ph[2]) * 0.28 + Math.cos(z * 0.05 - x * 0.04 + ph[3]) * 0.12;
   let lastD = 0;
   const terrainH = (x, z, stride = 2) => {
-    const d = lastD = distToTrack(x, z, stride), s = samples[nearI], kbt = s.kbT;
-    let near = s.y - 0.9; near += (th.liquidLevel - 3.5 - near) * kbt;
+    const d = lastD = distToTrack(x, z, stride), s = samples[nearI], cz = Math.max(s.carve, s.deep);
+    let near = s.y - 0.9; near += (th.liquidLevel - 3.5 - near) * s.carve;
     let far = s.y * 0.55 + nz(x, z) * th.hills + th.hills * 0.22;
-    if (kbt > 0) far += (Math.min(far, th.liquidLevel - 2.5) - far) * kbt * (1 - smooth(70, 170, d));
+    if (cz > 0) far += (Math.min(far, th.liquidLevel - (s.deep > s.carve ? 5 : 2.5)) - far) * cz * (1 - smooth(70, 170, d));
     return near + (far - near) * smooth(hw + 17, hw + 85, d);
   };
   {
@@ -263,7 +284,7 @@ export function buildTrack(def, opts = {}) {
       uTime: { value: 0 }, uColor: { value: lc }, uColor2: { value: lc2 }, uMode: { value: ex.liquidMode || 0 },
       uGlow: { value: th.liquidGlow ? B(1.9) : 1 },
     }]),
-    vertexShader: LIQUID_VS, fragmentShader: LIQUID_FS, fog: true,
+    vertexShader: LIQUID_VS, fragmentShader: LIQUID_FS, fog: true, side: THREE.DoubleSide,
   }));
   const liquid = new THREE.Mesh(own(new THREE.CircleGeometry(1150, 40)), liquidMat);
   liquid.rotation.x = -Math.PI / 2; liquid.position.y = th.liquidLevel;
@@ -302,6 +323,7 @@ export function buildTrack(def, opts = {}) {
     }
     im.frustumCulled = false; group.add(im);
   }
+  let farMesh = null;
   if (th.stars) {
     const pos = [];
     for (let i = 0; i < 500; i++) {
@@ -320,7 +342,8 @@ export function buildTrack(def, opts = {}) {
       c.copy(base).lerp(fogC, 0.3 + rand() * 0.25);
       parts.push([new THREE.ConeGeometry(w, h, 5), c.getHex(), [Math.cos(a) * r, h / 2 - 30, Math.sin(a) * r], null, [0, rand() * 3, 0]]);
     }
-    group.add(new THREE.Mesh(own(merged(parts)), own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }))));
+    farMesh = new THREE.Mesh(own(merged(parts)), own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })));
+    group.add(farMesh);
   }
 
   // ---- Luces, sombras y niebla ----
@@ -358,7 +381,7 @@ export function buildTrack(def, opts = {}) {
         const x = s0.x + s0.nx * off * side, z = s0.z + s0.nz * off * side;
         let y = terrainH(x, z);
         const s = samples[nearI], d = lastD;
-        if (s.kbT > 0.02 && d < 60) continue;
+        if ((s.carve > 0.02 || s.deep > 0.02) && d < 60) continue;
         if (s.kt > 0.02 && d < hw + 14) continue;
         if (small && d < s.lim + 2.4) { if (d < hw + 3) continue; y = s.y + 0.08; } else if (d < s.lim + 10) continue;
         if (y < th.liquidLevel + 0.4) continue;
@@ -374,6 +397,7 @@ export function buildTrack(def, opts = {}) {
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
       im.frustumCulled = false; im.castShadow = shadows && !small; im.receiveShadow = false;
       group.add(im);
+      if (opts.outline && !small && quality > 0.9) group.add(outlineInstanced(im));
     }
   }
 
@@ -476,6 +500,27 @@ export function buildTrack(def, opts = {}) {
       gr.add(new THREE.Mesh(top, topM), sm); group.add(gr);
       ramps.push({ idx: i0, x: s.x, z: s.z });
     }
+    // rampa grande de lanzamiento del ala delta (solo visual: el vuelo lo marca el tramo)
+    if (glR) {
+      const s = samples[(glR[0] - 3 + N) % N], gr = new THREE.Group();
+      gr.rotation.order = 'YXZ'; gr.rotation.set(-Math.atan(s.slope), s.h, 0); gr.position.set(s.x, s.y, s.z); gr.scale.set(1, 1.5, 1.4);
+      const sm = new THREE.Mesh(sideG, sideM); sm.castShadow = shadows;
+      gr.add(new THREE.Mesh(top, topM), sm); group.add(gr);
+    }
+  }
+
+  // ---- Aros de impulso (en el vuelo y bajo el agua) ----
+  const rings = [];
+  {
+    const g = own(new THREE.TorusGeometry(3.4, 0.3, 8, 28)), cols = [0xffd21f, 0xff4fd8, 0x22e6ff];
+    const addRing = (i, lat, up, n) => {
+      const s = samples[i], x = s.x + s.nx * lat, z = s.z + s.nz * lat;
+      const m = new THREE.Mesh(g, own(new THREE.MeshBasicMaterial({ color: new THREE.Color(cols[n % 3]).multiplyScalar(B(1.9)) })));
+      m.position.set(x, s.y + s.air + up, z); m.rotation.y = s.h; group.add(m);
+      rings.push({ idx: i, lat, x, z, y: s.y + s.air + up, mesh: m, cd: new Float32Array(8) });
+    };
+    if (glR) [0.26, 0.5, 0.74].forEach((t, n) => addRing(Math.round(glR[0] + (glR[1] - glR[0]) * t), [-3, 2.5, -1][n], 1.4, n));
+    if (subR) { const a = fIdx(def.sub[0] + def.sub[2]), b = fIdx(def.sub[1] - def.sub[2]); [0.15, 0.5, 0.85].forEach((t, n) => addRing(Math.round(a + (b - a) * t), [2.5, -3, 1.5][n], 2.4, n + 1)); }
   }
 
   // ---- Cajas de objetos ----
@@ -513,7 +558,7 @@ export function buildTrack(def, opts = {}) {
       for (let j = 0; j < 4; j++) {
         const idx = (base + j * 3) % N, s = samples[idx], lat = lat0 + Math.sin(j * 0.9) * 1.5;
         const x = s.x + s.nx * lat, z = s.z + s.nz * lat;
-        bananas.push({ x, z, px: x, pz: z, y: s.y, idx, active: true, timer: 0 });
+        bananas.push({ x, z, px: x, pz: z, y: s.y + s.air, y0: s.y + s.air, idx, active: true, timer: 0 });
       }
     }
     bananaMesh = new THREE.InstancedMesh(g, mat, bananas.length);
@@ -538,7 +583,7 @@ export function buildTrack(def, opts = {}) {
   }
 
   // ---- Público, banderas, vallas, túnel, farolas... ----
-  const scenery = buildScenery({ def, th, ex, samples, N, hw, rand, own, group, B, quality, shadows, uTime, special, nearRamp, tunR, fIdx });
+  const scenery = buildScenery({ def, th, ex, samples, N, hw, rand, own, group, B, quality, shadows, uTime, special, nearRamp, tunR, fIdx, boatR, glR, subR, outline: !!opts.outline, terrainAt: (x, z) => terrainH(x, z) });
 
   // ---- Minimapa ----
   let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9;
@@ -547,7 +592,7 @@ export function buildTrack(def, opts = {}) {
   const tmp = new THREE.Object3D(), baseHemi = hemi.intensity, baseDir = dir.intensity;
   const track = {
     def, group, fog, samples, N, length, spacing, hw, maxCurv, unlitRoad,
-    pads, ramps, itemBoxes, bananas, puddles, mini: { minX, maxX, minZ, maxZ },
+    pads, ramps, rings, itemBoxes, bananas, puddles, mini: { minX, maxX, minZ, maxZ }, liquidLevel: th.liquidLevel, farMesh,
     sunDir, hemi, dir, skyMat, baseFog: [th.fogNear, th.fogFar], fIdx,
     isFree: i => !special(samples[i]) && !nearRamp(i),
     grid(i) {
@@ -582,6 +627,7 @@ export function buildTrack(def, opts = {}) {
         dir.target.position.set(fx, focus.y || 0, fz);
         dir.position.set(fx + sunDir.x * 200, (focus.y || 0) + sunDir.y * 200, fz + sunDir.z * 200);
       }
+      for (let i = 0; i < rings.length; i++) { const r = rings[i]; r.mesh.scale.setScalar(1 + Math.sin(t * 4 + i) * 0.06); r.mesh.rotation.z = t * 0.6 + i; }
       for (const b of itemBoxes) {
         if (!b.active) { b.timer -= dt; if (b.timer <= 0) { b.active = true; b.mesh.visible = true; } continue; }
         b.mesh.rotation.set(t * 1.3 + b.ph, t * 1.9 + b.ph, 0);
@@ -589,7 +635,7 @@ export function buildTrack(def, opts = {}) {
       }
       for (let i = 0; i < bananas.length; i++) {
         const b = bananas[i];
-        if (!b.active) { b.timer -= dt; if (b.timer <= 0) { b.active = true; b.px = b.x; b.pz = b.z; } }
+        if (!b.active) { b.timer -= dt; if (b.timer <= 0) { b.active = true; b.px = b.x; b.pz = b.z; b.y = b.y0; } }
         tmp.position.set(b.px, b.active ? b.y + 1.1 + Math.sin(t * 4 + i) * 0.15 : -80, b.pz);
         tmp.rotation.set(0, t * 3 + i, 0.6); tmp.updateMatrix();
         bananaMesh.setMatrixAt(i, tmp.matrix);
