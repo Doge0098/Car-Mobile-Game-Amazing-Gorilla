@@ -275,3 +275,6 @@ html[lang=en] .help[lang=es], html[lang=es] .help[lang=en] { display: none; }
 /* ---------- Más modos ---------- */
 #mode-cards .card { min-height: 132px; } #mode-cards .card p { max-width: calc(100% - 56px); }
 #tod-seg button { padding: 6px 9px; font-size: 16px; }
+#mode-cards { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+#mode-cards .card { min-height: 150px; justify-content: flex-start; } #mode-cards .card h3 { font-size: 18px; max-width: calc(100% - 54px); }
+#tod-seg button.on { background: var(--cyan); }

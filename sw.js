@@ -1,9 +1,9 @@
 // Service worker: guarda todo el juego para jugar sin conexión.
-const VERSION = 'agr-v6';
+const VERSION = 'agr-v7';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/main.js', 'js/data.js', 'js/save.js', 'js/audio.js', 'js/input.js', 'js/track.js',
-  'js/race.js', 'js/fx.js', 'js/models.js', 'js/scenery.js', 'js/world.js', 'js/post.js', 'js/podium.js', 'js/outline.js', 'js/rules.js', 'js/replay.js', 'js/extras.js', 'js/showroom.js', 'js/i18n.js', 'js/lang_en.js', 'js/meta.js', 'js/shop.js', 'js/tutorial.js', 'js/share.js', 'js/vendor/three.module.min.js',
+  'js/race.js', 'js/fx.js', 'js/models.js', 'js/scenery.js', 'js/world.js', 'js/post.js', 'js/podium.js', 'js/outline.js', 'js/rules.js', 'js/replay.js', 'js/extras.js', 'js/showroom.js', 'js/i18n.js', 'js/lang_en.js', 'js/meta.js', 'js/shop.js', 'js/tutorial.js', 'js/share.js', 'js/variants.js', 'js/daily.js', 'js/boss.js', 'js/vendor/three.module.min.js',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 
