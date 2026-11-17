@@ -1,6 +1,6 @@
 // Decoración del circuito: túnel, gradas con público, banderas, globos, vallas, arcos, farolas y fauna.
 import * as THREE from './vendor/three.module.min.js';
-import { merged, canvasTex } from './models.js';
+import { merged, canvasTex, PROPS } from './models.js';
 import { addOutline, outlineInstanced } from './outline.js';
 
 const VIVID = [0xff4fd8, 0xffd21f, 0x22e6ff, 0x35e08a, 0xff7a1a, 0x7a5cff, 0xff3b4a];
@@ -13,7 +13,8 @@ const ADS = [
 ];
 
 export function buildScenery(ctx) {
-  const { th, ex, samples, N, hw, rand, own, group, B, quality, shadows, uTime, special, nearRamp, tunR, fIdx, boatR, glR, subR, outline, terrainAt } = ctx;
+  const { th, ex, samples, N, hw, rand, own, group, B, quality, shadows, uTime, special, nearRamp, tunR, fIdx, boatRs, outline, terrainAt } = ctx;
+  const boatR = boatRs[0] || null, subIdx = []; samples.forEach((q, i) => { if (q.zone === 'sub') subIdx.push(i); });
   const updaters = [];
   const S = i => samples[((i % N) + N) % N];
   const free = i => !special(S(i)) && !nearRamp(((i % N) + N) % N);
@@ -264,14 +265,14 @@ export function buildScenery(ctx) {
   }
 
   // ---------- Tramo de barco: boyas a ambos lados ----------
-  if (boatR) {
+  if (boatRs.length) {
     const g = own(merged([[new THREE.IcosahedronGeometry(0.75, 1), 0xffffff, [0, 0.25, 0]], [new THREE.CylinderGeometry(0.06, 0.06, 1.5, 5), 0xf0f0f0, [0, 1.3, 0]], [new THREE.IcosahedronGeometry(0.17, 0), 0xfff2a0, [0, 2.1, 0]]]));
     const m = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
     m.onBeforeCompile = sh => {
       sh.uniforms.uTime = uTime;
       sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed.y += sin(uTime * 2.2 + instanceMatrix[3].x * 0.4 + instanceMatrix[3].z * 0.3) * 0.14;');
     };
-    const list = []; for (let i = boatR[0] - 4; i <= boatR[1] + 4; i += 3) for (const side of [1, -1]) list.push([S(i), side]);
+    const list = []; for (const r of boatRs) { const st = r[1] - r[0] > 250 ? 6 : 3; for (let i = r[0] - 4; i <= r[1] + 4; i += st) for (const side of [1, -1]) list.push([S(i), side]); }
     const im = new THREE.InstancedMesh(g, m, list.length);
     list.forEach(([s, side], n) => {
       const lat = (hw + 2.4) * side; o.position.set(s.x + s.nx * lat, th.liquidLevel, s.z + s.nz * lat); o.rotation.set(0, 0, 0); o.scale.setScalar(1); o.updateMatrix();
@@ -281,8 +282,8 @@ export function buildScenery(ctx) {
   }
 
   // ---------- Tramo submarino: corales, algas, peces y rayos de luz ----------
-  if (subR) {
-    const mid = Math.round((subR[0] + subR[1]) / 2), len = subR[1] - subR[0];
+  if (subIdx.length > 10) {
+    const len = subIdx.length, pick = () => S(subIdx[Math.floor(rand() * len)]);
     const coralG = own(merged([
       [new THREE.CylinderGeometry(0.14, 0.24, 2.0, 6), 0xffffff, [0, 1.0, 0]], [new THREE.CylinderGeometry(0.1, 0.16, 1.4, 6), 0xffffff, [0.5, 1.4, 0], null, [0, 0, -0.7]],
       [new THREE.CylinderGeometry(0.1, 0.16, 1.2, 6), 0xffffff, [-0.45, 1.2, 0.2], null, [0.3, 0, 0.8]], [new THREE.IcosahedronGeometry(0.9, 1), 0xfff0e0, [0.9, 0.4, -0.6], [1.2, 0.7, 1]],
@@ -297,7 +298,7 @@ export function buildScenery(ctx) {
     const count = quality > 0.7 ? 70 : 36;
     const coral = new THREE.InstancedMesh(coralG, lambert(), count), weed = new THREE.InstancedMesh(weedG, weedM, count);
     for (let n = 0; n < count * 2; n++) {
-      const s = S(subR[0] + Math.floor(rand() * len)), lat = (hw + 3.5 + Math.pow(rand(), 1.6) * 34) * (rand() > 0.5 ? 1 : -1);
+      const s = pick(), lat = (hw + 3.5 + Math.pow(rand(), 1.6) * 34) * (rand() > 0.5 ? 1 : -1);
       const x = s.x + s.nx * lat, z = s.z + s.nz * lat, y = Math.abs(lat) < s.lim + 2.6 ? s.y : terrainAt(x, z);
       o.position.set(x, y - 0.1, z); o.rotation.set(0, rand() * 6.28, 0); o.scale.setScalar(0.8 + rand() * 1.3); o.updateMatrix();
       if (n < count) { coral.setMatrixAt(n, o.matrix); coral.setColorAt(n, col.set(VIVID[Math.floor(rand() * VIVID.length)])); } else weed.setMatrixAt(n - count, o.matrix);
@@ -308,12 +309,12 @@ export function buildScenery(ctx) {
     const fishG = own(merged([[new THREE.IcosahedronGeometry(0.5, 1), 0xffffff, null, [0.45, 0.75, 1.3]], [new THREE.ConeGeometry(0.4, 0.6, 4), 0xffffff, [0, 0, -0.85], [0.2, 1, 1], [-Math.PI / 2, 0, 0]], [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [0.2, 0.12, 0.5]], [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [-0.2, 0.12, 0.5]]]));
     const fc = quality > 0.7 ? 32 : 16, fish = new THREE.InstancedMesh(fishG, lambert(), fc), fl = [];
     for (let i = 0; i < fc; i++) {
-      const s = S(subR[0] + Math.floor(rand() * len)), lat = (rand() - 0.5) * 40;
+      const s = pick(), lat = (rand() - 0.5) * 40;
       fl.push({ cx: s.x + s.nx * lat, cz: s.z + s.nz * lat, y: s.y + 2.5 + rand() * 5, r: 3 + rand() * 7, sp: (0.4 + rand() * 0.5) * (rand() > 0.5 ? 1 : -1), ph: rand() * 6.28, sc: 0.6 + rand() * 0.8 });
       fish.setColorAt(i, col.set([0xff7a1a, 0xffd21f, 0x22e6ff, 0xff4fd8][i % 4]));
     }
     fish.frustumCulled = false; group.add(fish);
-    const c0 = S(mid);
+    const c0 = S(subIdx[len >> 1]);
     updaters.push((dt, t, cam) => {
       if ((c0.x - cam.x) ** 2 + (c0.z - cam.z) ** 2 > 260 * 260) return;
       for (let i = 0; i < fc; i++) {
@@ -325,7 +326,7 @@ export function buildScenery(ctx) {
     });
     const rayG = own(new THREE.ConeGeometry(3, 46, 16, 1, true)); rayG.translate(0, -23, 0);
     const rayM = own(new THREE.MeshBasicMaterial({ color: 0xcff6ff, transparent: true, opacity: 0.045, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
-    for (let i = 0; i < 9; i++) { const s = S(subR[0] + Math.floor((i + 0.5) / 9 * len)), lat = (i % 2 ? 1 : -1) * (4 + rand() * 12); const r = new THREE.Mesh(rayG, rayM); r.position.set(s.x + s.nx * lat, th.liquidLevel + 22, s.z + s.nz * lat); r.rotation.z = 0.22; group.add(r); }
+    for (let i = 0; i < 9; i++) { const s = S(subIdx[Math.floor((i + 0.5) / 9 * len)]), lat = (i % 2 ? 1 : -1) * (4 + rand() * 12); const r = new THREE.Mesh(rayG, rayM); r.position.set(s.x + s.nx * lat, th.liquidLevel + 22, s.z + s.nz * lat); r.rotation.z = 0.22; group.add(r); }
   }
 
   // ---------- Globos aerostáticos ----------
@@ -444,6 +445,52 @@ export function buildScenery(ctx) {
       updaters.push((dt, t) => { for (const q of il) { q.m.position.y = q.y + Math.sin(t * 0.6 + q.ph) * 2.2; q.m.rotation.y += dt * 0.05; } });
       const lol = own(merged([[Cy(0.3, 0.3, 9, 6), 0xffffff, [0, 4.5, 0]], [Cy(3, 3, 0.7, 16), 0xffffff, [0, 11, 0], null, [Math.PI / 2, 0, 0]], [new THREE.TorusGeometry(2.1, 0.36, 6, 18), 0xffe600, [0, 11, 0.2]], [new THREE.TorusGeometry(1.1, 0.34, 6, 14), 0x22e6ff, [0, 11, 0.25]]]));
       [0.035, 0.29, 0.47, 0.56, 0.73, 0.945].forEach((u, n) => { put(lol, own(new THREE.MeshLambertMaterial({ vertexColors: true, color: [0xff8ad8, 0xffffff, 0xc9a0ff][n % 3] })), spot(u, 14, n % 2 ? 1 : -1)); });
+    } else if (id === 'nubes') {
+      // palacio dorado sobre una nube y puertas con columnas junto a la pista
+      const sp = spot(0.72, 105), p = [[Ic(26), 0xffffff, [0, -8, 0], [1.5, 0.5, 1.3]], [Ic(16), 0xeef3ff, [26, -9, 8], [1.3, 0.5, 1]], [Ic(15), 0xeef3ff, [-25, -9, -6], [1.3, 0.5, 1]],
+        [Bx(30, 12, 22), 0xfff6ff, [0, 8, 0]], [Bx(12, 22, 12), 0xffffff, [0, 13, 0]], [new THREE.SphereGeometry(7.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xffd21f, [0, 24, 0]], [Co(1.2, 6, 6), 0xffd21f, [0, 34, 0]]];
+      for (const [x, z] of [[-15, -11], [15, -11], [-15, 11], [15, 11]]) p.push([Cy(3.4, 3.8, 22, 10), 0xffffff, [x, 11, z]], [new THREE.SphereGeometry(4.2, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xffd21f, [x, 22, z]], [Co(0.8, 4, 6), 0xffd21f, [x, 27.5, z]]);
+      for (let i = 0; i < 6; i++) p.push([Cy(1, 1.1, 9, 8), 0xfff0d0, [-12.5 + i * 5, 4.5, 12.5]]);
+      sp.y = Math.max(sp.y, 14); put(own(merged(p)), lambert(), sp);
+      const gate = own(merged([[Cy(1, 1.15, 11, 10), 0xffffff, [-9.6, 5.5, 0]], [Cy(1, 1.15, 11, 10), 0xffffff, [9.6, 5.5, 0]], [Bx(22.5, 1.6, 2.6), 0xfff6ff, [0, 11.8, 0]], [Bx(8, 3.2, 1.4), 0xffd21f, [0, 14, 0], null, [0, 0, 0]], [Ic(2.2), 0xffffff, [-9.6, -0.3, 0], [1.4, 0.6, 1.4]], [Ic(2.2), 0xffffff, [9.6, -0.3, 0], [1.4, 0.6, 1.4]]]));
+      for (const u of [0.035, 0.235, 0.6, 0.945]) { const i = fIdx(u), s = S(i); if (free(i)) { const m = addMesh(gate, lambert()); m.position.set(s.x, s.y, s.z); m.rotation.y = s.h; if (outline) addOutline(m); } }
+      const rc = [0xff3b4a, 0xff9a1a, 0xffe600, 0x35e08a, 0x22b6ff, 0x9a5cff];
+      rc.forEach((c, i) => { const m = new THREE.Mesh(own(new THREE.TorusGeometry(260 - i * 7, 3.6, 6, 50, Math.PI)), own(new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(B(1.1)), transparent: true, opacity: 0.75, fog: false, depthWrite: false }))); m.position.set(sp.x, sp.y - 40, sp.z); m.rotation.y = sp.yaw + 0.4; group.add(m); });
+    } else if (id === 'oceano') {
+      // islas con palmeras, arcos de roca sobre la ruta, faro y barcos
+      const palm = own(PROPS.palm.make()), palmM = lambert();
+      const islG = own(merged([[Ic(11), 0xffe08a, [0, -3.5, 0], [1.4, 0.5, 1.2]], [Ic(5), 0xf2c868, [6, -1.6, 3], [1.3, 0.5, 1]], [new THREE.DodecahedronGeometry(2.4, 0), 0x9aa0b0, [-7, 0.6, -3]], [new THREE.DodecahedronGeometry(1.5, 0), 0x7f8597, [8, 0.3, -5]]]));
+      for (let k = 0; k < 9; k++) {
+        const i = Math.floor((k + 0.5) / 9 * N), s = S(i), side = k % 2 ? 1 : -1, lat = (hw + 24 + rand() * 20) * side, x = s.x + s.nx * lat, z = s.z + s.nz * lat, yaw = rand() * 6.28;
+        put(islG, lambert(), { x, y: th.liquidLevel + 0.6, z, yaw });
+        for (let j = 0; j < 3; j++) { const a = yaw + j * 2.1, pm = addMesh(palm, palmM); pm.position.set(x + Math.cos(a) * 4, th.liquidLevel + 1.6, z + Math.sin(a) * 4); pm.rotation.y = a; pm.scale.setScalar(1.1 + rand() * 0.5); if (outline) addOutline(pm); }
+      }
+      const ap = [], R2 = hw + 9;
+      for (let k = 0; k < 11; k++) { const a = Math.PI * (k + 0.5) / 11; ap.push([new THREE.DodecahedronGeometry(3.4 + rand() * 1.4, 0), k % 2 ? 0x9aa0b0 : 0x8a90a0, [Math.cos(a) * R2, Math.sin(a) * R2 * 0.8 - 1, (rand() - 0.5) * 2]]); }
+      const arch = own(merged(ap));
+      for (const u of [0.16, 0.42, 0.66, 0.9]) { const s = S(fIdx(u)), m = addMesh(arch, lambert()); m.position.set(s.x, th.liquidLevel, s.z); m.rotation.y = s.h; if (outline) addOutline(m); }
+      const lh = [[Cy(3.2, 4.6, 28, 12), 0xffffff, [0, 14, 0]], [Cy(3.95, 4.3, 5, 12), 0xff3b4a, [0, 6, 0]], [Cy(3.45, 3.75, 5, 12), 0xff3b4a, [0, 17, 0]], [Cy(2.5, 2.5, 3.4, 10), 0xfff2a0, [0, 30.5, 0]], [Co(3.6, 4.5, 10), 0xff3b4a, [0, 34.5, 0]], [Ic(10), 0x8a90a0, [0, -4, 0], [1.3, 0.8, 1.3]]];
+      const ls = S(fIdx(0.5)), ll = (hw + 46) * (ls.curv > 0 ? 1 : -1); put(own(merged(lh)), lambert(), { x: ls.x + ls.nx * ll, y: th.liquidLevel + 1, z: ls.z + ls.nz * ll, yaw: 0 });
+      const sh = [[new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0x7a4a2a, [0, 3.2, 0], [5, 4.5, 15]], [Bx(9.4, 0.5, 28), 0xa8744a, [0, 3.3, 0]], [Bx(8, 4, 7), 0x6a3a1a, [0, 5.3, -10.5]]];
+      for (const [z, hgt] of [[5, 24], [-4, 20]]) sh.push([Cy(0.4, 0.5, hgt, 6), 0x5a3a1a, [0, 3.3 + hgt / 2, z]], [Bx(11, hgt * 0.4, 0.3), 0xfff6e0, [0, 3.3 + hgt * 0.72, z + 0.6]], [Bx(8.5, hgt * 0.26, 0.3), 0xfff6e0, [0, 3.3 + hgt * 0.34, z + 0.6]]);
+      const shipG = own(merged(sh)), ships = [];
+      for (const u of [0.08, 0.34, 0.78]) { const s = S(fIdx(u)), lat = (hw + 38) * (s.curv > 0 ? -1 : 1); ships.push(put(shipG, lambert(), { x: s.x + s.nx * lat, y: th.liquidLevel - 0.6, z: s.z + s.nz * lat, yaw: s.h + 0.6 })); }
+      updaters.push((dt, t) => ships.forEach((m, i) => { m.position.y = th.liquidLevel - 0.6 + Math.sin(t * 0.9 + i * 2) * 0.35; m.rotation.z = Math.sin(t * 0.7 + i) * 0.04; }));
+    } else if (id === 'abismo') {
+      // galeón hundido, ruinas con cúpula, almeja gigante y medusas luminosas
+      const sh = [[new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0x5a4a3a, [0, 3.2, 0], [5, 4.5, 15]], [Bx(9.4, 0.5, 28), 0x6a5a48, [0, 3.3, 0]], [Bx(8, 4, 7), 0x4a3a2a, [0, 5.3, -10.5]], [Cy(0.4, 0.5, 20, 6), 0x4a3a2a, [0, 12, 5], null, [0, 0, 0.5]], [Cy(0.4, 0.5, 14, 6), 0x4a3a2a, [0, 9, -4], null, [0.3, 0, -0.2]]];
+      const w1 = spot(0.3, 26), wm = put(own(merged(sh)), lambert(), w1); wm.rotation.z = 0.35; wm.position.y += 1.5;
+      const ru = [[Cy(11, 12, 1.2, 14), 0xcfd8e0, [0, 0.6, 0]], [new THREE.SphereGeometry(8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x9fb4c8, [0, 10.5, 0]], [Cy(8.6, 8.6, 1, 14), 0xcfd8e0, [0, 10.2, 0]]];
+      for (let k = 0; k < 8; k++) { const a = k / 8 * 6.28, broken = k % 3 === 1; ru.push([Cy(0.9, 1, broken ? 4.5 : 9, 8), 0xdfe8f0, [Math.cos(a) * 8, 1.2 + (broken ? 2.25 : 4.5), Math.sin(a) * 8]]); }
+      const r1 = spot(0.72, 30); put(own(merged(ru)), lambert(), r1);
+      const orb = new THREE.Mesh(own(Ic(1.6)), glowM(0x7ff0ff)); orb.position.set(r1.x, r1.y + 4.5, r1.z); group.add(orb);
+      const cl = [[new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), 0xffb8d8, [0, 2.2, 0], [1.2, 0.6, 1]], [new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xff9ac8, [0, 2.6, -1.2], [1.2, 0.6, 1], [-0.7, 0, 0]]];
+      for (const u of [0.05, 0.47, 0.9]) { const q = spot(u, 13, u > 0.4 ? 1 : -1); put(own(merged(cl)), lambert(), q); const pearl = new THREE.Mesh(own(Ic(0.9)), glowM(0xffffff)); pearl.position.set(q.x, q.y + 2.6, q.z); group.add(pearl); }
+      const jg = own(merged([[new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xffffff, null, [1, 0.8, 1]], [Cy(0.06, 0.02, 2.2, 4), 0xffffff, [0.4, -1.1, 0]], [Cy(0.06, 0.02, 2.6, 4), 0xffffff, [-0.3, -1.3, 0.3]], [Cy(0.06, 0.02, 2, 4), 0xffffff, [0, -1, -0.4]]]));
+      const jc = 18, jm = own(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8, color: new THREE.Color(1, 1, 1).multiplyScalar(B(1.6)) })), jel = new THREE.InstancedMesh(jg, jm, jc), jl = [];
+      for (let i = 0; i < jc; i++) { const s = S(Math.floor(rand() * N)), lat = (hw + 5 + rand() * 22) * (rand() > 0.5 ? 1 : -1); jl.push({ x: s.x + s.nx * lat, y: s.y + 5 + rand() * 6, z: s.z + s.nz * lat, ph: rand() * 6.28, sc: 0.8 + rand() * 0.9 }); jel.setColorAt(i, col.set([0xff7ae0, 0x7ff0ff, 0xc9a0ff][i % 3])); }
+      jel.frustumCulled = false; group.add(jel);
+      updaters.push((dt, t) => { for (let i = 0; i < jc; i++) { const j = jl[i], k = Math.sin(t * 1.5 + j.ph); o.position.set(j.x, j.y + Math.sin(t * 0.5 + j.ph) * 1.6, j.z); o.rotation.set(0, j.ph, 0); o.scale.set(j.sc * (1 + k * 0.12), j.sc * (1 - k * 0.15), j.sc * (1 + k * 0.12)); o.updateMatrix(); jel.setMatrixAt(i, o.matrix); } jel.instanceMatrix.needsUpdate = true; });
     }
   }
 

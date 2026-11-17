@@ -148,11 +148,62 @@ export const TRACKS = [
     boat: [0.83, 0.9], glide: [0.475, 0.53, 6, 2.5], sub: [0.315, 0.445, 0.04, 6], tunnel: [0.105, 0.165], bridge: [0.6, 0.68], ramps: [0.25, 0.76],
     extras: { weather: 'stars', hazard: 'star', life: null, liquidMode: 3, lamp: 0xffe600, deck: 0xffffff, tunnelCol: 0xd0a8ff, tunnelGlow: 0xffffff, puddle: null, mark: 0xffffff },
   },
+  {
+    id: 'nubes', name: 'Reino de las Nubes', cup: 2, R: 325, width: 15.5,
+    waves: [[3, 0.13, 0.7], [5, 0.07, 2.2], [8, 0.035, 1.0]], seed: 71,
+    theme: {
+      skyTop: 0x1a5cff, skyBottom: 0xffe9f4, fog: 0xeef4ff, fogNear: 150, fogFar: 560,
+      ground: 0xffffff, ground2: 0xdfe9ff, liquid: 0xf6f9ff, liquidLevel: -3, liquidGlow: 0,
+      road: '#fbf6ff', line: '#ffb21f', curbA: 0xffd21f, curbB: 0xffffff,
+      sun: 0xfff6d8, light: 1.3, ambientSky: 0xeaf2ff, ambientGround: 0xbcd0ff,
+      props: [['cloudpuff', 170], ['column', 60], ['crystal', 50], ['candytree', 40]],
+      shore: 0xffffff, rock: 0xcfdcff, peak: 0xffffff, cloudAmt: 0.62,
+      fx: 'stars', fxColor: 0xffffff, hills: 16, mountains: 0xc8d8ff, clouds: 0xffffff, propGlow: 0xffe9a0,
+    },
+    music: { tempo: 136, root: 64, scale: 'major', prog: [0, 4, 5, 3], seed: 51, style: 'temple' },
+    hills: [[0, 0], [0.05, 1.5], [0.26, 6], [0.335, 9], [0.4, 13], [0.6, 7], [0.66, 8], [0.74, 10], [0.94, 1.5], [1, 0]],
+    glide: [[0.12, 0.19, 14, 5], [0.465, 0.54, 18, 6], [0.815, 0.895, 13, 3]], bridge: [0.3, 0.37], ramps: [0.26, 0.62],
+    extras: { weather: 'none', hazard: 'star', life: 'birds', liquidMode: 4, lamp: 0xffe9a0, deck: 0xffffff, tunnelCol: 0xdfe9ff, tunnelGlow: 0xffe9a0, puddle: null, mark: 0xbcd0ff, ambience: 'temple' },
+  },
+  {
+    id: 'oceano', name: 'Mar Abierto', cup: 2, R: 355, width: 19,
+    waves: [[2, 0.17, 1.1], [3, 0.08, 0.2], [5, 0.04, 2.9]], seed: 83,
+    theme: {
+      skyTop: 0x1f7bff, skyBottom: 0xd8f6ff, fog: 0xcdefff, fogNear: 170, fogFar: 600,
+      ground: 0xffe08a, ground2: 0xf2c868, liquid: 0x18b4e6, liquidLevel: -1.2, liquidGlow: 0,
+      road: '#9a744a', line: '#fff6c9', curbA: 0xff3b4a, curbB: 0xffffff,
+      sun: 0xffffff, light: 1.35, ambientSky: 0xdff6ff, ambientGround: 0x7ad0e8,
+      props: [['palm', 90], ['rock', 60], ['umbrella', 20]],
+      shore: 0xfff0c0, rock: 0xb8a078, peak: 0x8fd96a, cloudAmt: 0.55,
+      fx: 'bubbles', fxColor: 0xffffff, hills: 20, mountains: 0x4ab8d8, clouds: 0xffffff,
+    },
+    music: { tempo: 130, root: 62, scale: 'major', prog: [0, 5, 3, 4], seed: 64, style: 'beach' },
+    hills: [[0, 0.6], [1, 0.6]], boat: [[0.035, 0.965]], ramps: [0.26, 0.5, 0.86], hazardInZones: true, noShortcut: true,
+    extras: { weather: 'rain', hazard: 'barrel', life: 'birds', liquidMode: 0, lamp: 0xff5ec4, deck: 0xa8744a, tunnelCol: 0xd9b98a, tunnelGlow: 0xfff0b0, puddle: null, mark: 0x3a2a20, ambience: 'beach' },
+  },
+  {
+    id: 'abismo', name: 'Fondo Marino', cup: 2, R: 318, width: 15,
+    waves: [[2, 0.13, 2.6], [4, 0.09, 0.4], [7, 0.05, 1.7]], seed: 97,
+    theme: {
+      skyTop: 0x0a6ad8, skyBottom: 0x9fe8ff, fog: 0x0f5aa8, fogNear: 30, fogFar: 200,
+      ground: 0xe8d79a, ground2: 0xd2b878, liquid: 0x1a9ae8, liquidLevel: 0, liquidGlow: 0,
+      road: '#3a4a6a', line: '#7ff0ff', curbA: 0x22e6ff, curbB: 0xffffff,
+      sun: 0xcfefff, light: 1.15, ambientSky: 0x9fd8ff, ambientGround: 0x3a6a9a,
+      props: [['coral', 170], ['seaweed', 150], ['rock', 70], ['shell', 80], ['crystal', 40]], underwater: true,
+      shore: 0xe8d79a, rock: 0x7a8aa0, peak: 0xcfd8e0, cloudAmt: 0.4,
+      fx: 'bubbles', fxColor: 0xdff8ff, hills: 14, mountains: 0x2a6aa8, clouds: 0xffffff, propGlow: 0x7ff0ff,
+    },
+    music: { tempo: 122, root: 57, scale: 'minor', prog: [0, 5, 3, 4], seed: 77, style: 'ice' },
+    hills: [[0, -9], [0.1, -8], [0.2, -11], [0.32, -8.5], [0.45, -12], [0.58, -9], [0.7, -11], [0.82, -8], [0.92, -9.5], [1, -9]],
+    deepAll: true, tunnel: [0.61, 0.68], ringsAt: [0.14, 0.25, 0.38, 0.5, 0.75, 0.88], ramps: [],
+    extras: { weather: 'none', hazard: 'crab', life: null, liquidMode: 0, lamp: 0x7ff0ff, deck: 0x6a7a9a, tunnelCol: 0x4a6a8a, tunnelGlow: 0x7ff0ff, puddle: null, mark: 0x2a3a5a, ambience: '' },
+  },
 ];
 
 export const CUPS = [
   { id: 'platano', name: 'Copa Plátano', icon: '🍌', tracks: ['selva', 'playa', 'volcan'] },
   { id: 'diamante', name: 'Copa Diamante', icon: '💎', tracks: ['hielo', 'neon', 'arcoiris'] },
+  { id: 'aventura', name: 'Copa Aventura', icon: '🧭', tracks: ['nubes', 'oceano', 'abismo'] },
 ];
 
 export const DIFFICULTIES = [
