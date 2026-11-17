@@ -30,20 +30,33 @@ renderer.setClearColor(0x1a0b3a);
 const camera = new THREE.PerspectiveCamera(68, 1, 0.3, 2400);
 const qualityK = () => ({ baja: 0.5, media: 0.8, alta: 1 }[save.settings.quality] || 1);
 const post = new Post(renderer);
-const usePost = () => !!save.settings.bloom && post.supported;
+// ---------- Calidad automática ----------
+// Gráficos efectivos = ajustes del jugador menos los pasos de reducción automática ya aplicados (settings.autoQ):
+//  1 sin sombras · 2 resolución 1,5× · 3 sin contorno · 4 sin resplandor · 5 resolución 1×   (nunca por debajo del nivel «Bajos»)
+const AUTO_STEPS = 5, AUTO_FPS = 26, AUTO_HOLD = 4, AUTO_GAP = 6; // umbral de FPS, segundos por debajo y pausa entre pasos
+const G = { shadows: false, outline: true, bloom: false, pr: 1, msaa: 0 };
+const autoN = () => (save.settings.autoQuality !== false ? Math.max(0, Math.min(AUTO_STEPS, save.settings.autoQ | 0)) : 0);
+function syncGfx() {
+  const s = save.settings, n = autoN();
+  G.shadows = !!s.shadows && n < 1; G.outline = s.outline !== false && n < 3; G.bloom = !!s.bloom && n < 4;
+  G.pr = s.quality === 'alta' ? 2 : s.quality === 'media' ? 1.5 : 1;
+  if (n >= 2) G.pr = Math.min(G.pr, 1.5); if (n >= 5) G.pr = 1;
+  G.msaa = s.quality === 'alta' && n < 2 ? 4 : 0;
+}
+const usePost = () => G.bloom && post.supported;
 function render(scene, cam) {
   if (usePost()) post.render(scene, cam); else { renderer.setRenderTarget(null); renderer.render(scene, cam); }
 }
 
 function resize() {
+  syncGfx();
   const w = innerWidth, h = innerHeight;
-  const q = save.settings.quality;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, q === 'alta' ? 2 : q === 'media' ? 1.5 : 1));
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, G.pr));
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
   menuCam.aspect = w / h; placeShow(); applyShowOffset();
-  if (usePost()) post.setSize(q === 'alta' ? 4 : 0); else if (post.supported) post.disposeTargets();
-  const db = renderer.getDrawingBufferSize(new THREE.Vector2()); setOutlineRes(db.x, db.y); setOutline(save.settings.outline !== false);
+  if (usePost()) post.setSize(G.msaa); else if (post.supported) post.disposeTargets();
+  const db = renderer.getDrawingBufferSize(new THREE.Vector2()); setOutlineRes(db.x, db.y); setOutline(G.outline);
   menuRing.material.color.set(0x22e6ff).multiplyScalar(usePost() ? 2.2 : 1);
 }
 
@@ -166,7 +179,8 @@ let race = null, track = null, raceScene = null, fxAdd = null, fxNorm = null, am
 let paused = false, mode = 'race', currentTrack = null, cupState = null, resultsShown = false, finishTimer = 0;
 let miniBg = null, rollIcon = 0, rollT = 0, lastHud = {};
 const podium = new Podium();
-let podiumAfter = null, podiumT = 0, rampHints = 0, fpsAcc = 0, fpsN = 0, fpsHinted = false, inTunnel = false;
+let podiumAfter = null, podiumT = 0, rampHints = 0, inTunnel = false;
+let frameAvg = 1 / 60, lowT = 0, stepGap = 0; // calidad automática: media móvil del fotograma, tiempo con pocos FPS y espera tras un paso
 // misiones de la carrera en curso y su contexto (se reutiliza: sin basura por fotograma)
 let missions = [], missionT = 0;
 const mctx = { st: null, pos: 0, total: 0, time: 0, par: 0, finished: false, started: false };
@@ -213,8 +227,9 @@ function startRace(trackId) {
   setTimeout(() => {
     disposeRace();
     currentTrack = trackById(trackId);
+    syncGfx();
     const q = qualityK();
-    const gfx = { quality: q, bloom: usePost(), shadows: !!save.settings.shadows, outline: save.settings.outline !== false };
+    const gfx = { quality: q, bloom: usePost(), shadows: G.shadows, outline: G.outline };
     renderer.shadowMap.enabled = gfx.shadows;
     track = buildTrack(currentTrack, gfx);
     raceScene = new THREE.Scene();
@@ -232,7 +247,7 @@ function startRace(trackId) {
       rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1),
       ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
     });
-    paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; fpsAcc = 0; fpsN = 0;
+    paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; frameAvg = 1 / 60; lowT = 0; stepGap = 2;
     hint('');
     mctx.st = race.player.st; mctx.total = race.racers.length; mctx.par = parTime(mode, track.length, race.laps);
     missions = pickMissions(mode, mctx.par); missionT = 0; syncMissions();
@@ -324,6 +339,34 @@ function onRaceEvent(ev, data) {
   }
 }
 function flash(soft) { const f = $('flash'); f.classList.remove('go', 'soft'); void f.offsetWidth; f.classList.add(soft ? 'soft' : 'go'); }
+
+// Calidad automática: se llama en cada fotograma de carrera con su duración real (s)
+function autoQualityTick(rdt) {
+  if (save.settings.autoQuality === false || !(rdt > 0) || rdt > 0.5) return; // los parones (pestaña oculta, carga) no cuentan
+  frameAvg += (rdt - frameAvg) * Math.min(1, rdt * 1.2);
+  stepGap -= rdt;
+  lowT = frameAvg > 1 / AUTO_FPS ? lowT + rdt : 0;
+  if (lowT > AUTO_HOLD && stepGap <= 0) { lowT = 0; stepGap = autoStepDown() ? AUTO_GAP : 30; }
+}
+// Quita lo siguiente de la lista que de verdad cambie algo. Devuelve false si ya no queda nada.
+function autoStepDown() {
+  const s = save.settings, b = { ...G }, n0 = autoN();
+  let n = n0;
+  while (n < AUTO_STEPS) {
+    s.autoQ = ++n; syncGfx();
+    if (G.shadows === b.shadows && G.outline === b.outline && G.bloom === b.bloom && G.pr === b.pr) continue; // paso sin efecto con estos ajustes
+    if (b.shadows && !G.shadows) { // sin sombras reales: vuelven las sombras redondas bajo los coches
+      renderer.shadowMap.enabled = false;
+      if (track && track.dir) track.dir.castShadow = false;
+      if (race) { race.shadows = false; for (const r of race.racers) r.shadow.visible = true; }
+    }
+    resize(); persist();
+    toast('Gráficos ajustados para ir más fluido');
+    return true;
+  }
+  s.autoQ = n0; syncGfx(); // nada que quitar: se queda como estaba
+  return false;
+}
 
 // ---------- Minimapa ----------
 function buildMinimap() {
@@ -686,7 +729,8 @@ function buildSettings() {
   seg('set-controls', 'controls');
   seg('set-btnsize', 'btnSize', applyControls);
   // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
-  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; s.outline = s.quality !== 'baja'; persist(); resize(); buildSettings(); });
+  // (cambiar los gráficos a mano anula la reducción automática)
+  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; s.outline = s.quality !== 'baja'; s.autoQ = 0; persist(); resize(); buildSettings(); });
   const flag = (id, key, after) => {
     $(id).querySelectorAll('button').forEach(b => {
       const v = b.dataset.v === '1';
@@ -695,7 +739,11 @@ function buildSettings() {
     });
   };
   if (s.outline == null) s.outline = true;
-  flag('set-outline', 'outline', resize); flag('set-bloom', 'bloom', resize); flag('set-shadows', 'shadows');
+  const manual = () => { s.autoQ = 0; persist(); resize(); buildSettings(); };
+  flag('set-outline', 'outline', manual); flag('set-bloom', 'bloom', manual); flag('set-shadows', 'shadows', manual);
+  if (s.autoQuality == null) s.autoQuality = true;
+  flag('set-autoq', 'autoQuality', manual);
+  $('set-autoq-info').textContent = autoN() ? fill('Reducidos ahora: paso {n} de {max}', { n: autoN(), max: AUTO_STEPS }) : '';
   flag('set-haptics', 'haptics', () => { A.setHaptics?.(!!s.haptics); A.haptic?.('hit'); });
   flag('set-lefty', 'lefty', applyControls);
   $('set-btnalpha').value = s.btnAlpha;
@@ -770,7 +818,7 @@ function setPaused(on) {
 let last = performance.now(), tGlobal = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const rdt = (now - last) / 1000, dt = Math.min(0.05, rdt); last = now;
   const ps = renderer.domElement.height * 0.05;
   if (podium.active) {
     podiumT += dt;
@@ -802,11 +850,8 @@ function frame(now) {
         if (muffled !== inTunnel) { inTunnel = muffled; A.setTunnel?.(muffled); }
         updateHud(dt);
         if (finishTimer > 0) { finishTimer -= dt; if (finishTimer <= 0) showResults(); }
-        // aviso si el móvil no puede con los gráficos
-        if (race.state === 'racing' && !fpsHinted && race.time < 9) {
-          fpsAcc += dt; fpsN++;
-          if (fpsAcc > 6) { if (fpsN / fpsAcc < 24 && save.settings.quality !== 'baja') { fpsHinted = true; toast('¿Va lento? Baja los gráficos en Ajustes ⚙️'); } fpsAcc = -1e9; }
-        }
+        // si el móvil no puede con los gráficos, se van reduciendo solos
+        if (race.state === 'racing') autoQualityTick(rdt);
       }
     } else if (input.pausePressed) { consumePresses(); setPaused(false); }
     render(raceScene, camera);
@@ -842,4 +887,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, get gfx() { return G; }, autoTick: autoQualityTick, renderer, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
