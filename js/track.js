@@ -42,7 +42,14 @@ float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * 
 #define WAVE(dx, dz, fr, sp, am) { float ph = dot(p, vec2(dx, dz)) * fr + uTime * sp; hgt += am * sin(ph); g += vec2(dx, dz) * (fr * am * cos(ph)); }
 void main(){
   vec2 p = vW.xz; vec3 col; float alpha = 1.0;
-  if (uMode > 3.5) {
+  if (uMode > 4.5) {
+    // vacío estelar: nebulosa suave y estrellas que titilan
+    float n = vnoise(p * 0.012 + uTime * 0.01) * 0.6 + vnoise(p * 0.045 - uTime * 0.015) * 0.4;
+    col = mix(uColor2, uColor, smoothstep(0.35, 0.9, n) * 0.55);
+    vec2 sc = floor(p * 0.3), sf = fract(p * 0.3) - 0.5; float sh = hash1(sc);
+    float st = step(0.8, sh) * smoothstep(0.2, 0.0, length(sf + (hash2(sc) - 0.5) * 0.55)) * (0.55 + 0.45 * sin(uTime * (1.5 + sh * 4.0) + sh * 40.0));
+    col += vec3(0.85, 0.93, 1.0) * st * uGlow;
+  } else if (uMode > 3.5) {
     // mar de nubes
     float n = vnoise(p * 0.02 + uTime * 0.02) * 0.6 + vnoise(p * 0.06 - uTime * 0.03) * 0.3 + vnoise(p * 0.17 + uTime * 0.05) * 0.1;
     col = mix(uColor2, uColor, smoothstep(0.3, 0.7, n)) + smoothstep(0.62, 0.9, n) * 0.12;
@@ -460,7 +467,7 @@ export function buildTrack(def, opts = {}) {
   // ---- Agua / lava / líquido animado ----
   const sunDir = new THREE.Vector3(0.7, 0.62, 0.5).normalize();
   const lc = new THREE.Color(th.liquid), lc2 = lc.clone();
-  if (ex.liquidMode === 1) lc2.set(0x2a0c10); else if (ex.liquidMode === 2) lc2.set(0x0a0624); else if (ex.liquidMode === 4) lc2.set(0xc9d8ff); else lc2.offsetHSL(0.02, 0.05, -0.2);
+  if (ex.liquidMode === 1) lc2.set(0x2a0c10); else if (ex.liquidMode === 2) lc2.set(0x0a0624); else if (ex.liquidMode === 4) lc2.set(0xc9d8ff); else if (ex.liquidMode === 5) lc2.set(0x05030f); else lc2.offsetHSL(0.02, 0.05, -0.2);
   const isWater = !ex.liquidMode || ex.liquidMode === 3;
   const liquidMat = own(new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
@@ -479,7 +486,7 @@ export function buildTrack(def, opts = {}) {
   // ---- Cielo ----
   const cloudC = new THREE.Color(th.clouds);
   const skyMat = own(new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false, defines: quality > 0.6 ? { CLOUDS: 1 } : {},
+    side: THREE.BackSide, depthWrite: false, fog: false, defines: quality > 0.6 && !th.space ? { CLOUDS: 1 } : {},
     uniforms: {
       top: { value: new THREE.Color(th.skyTop) }, bottom: { value: new THREE.Color(th.skyBottom) }, dim: { value: 1 }, uTime: { value: 0 },
       uSun: { value: sunDir }, uSunCol: { value: new THREE.Color(th.sun).multiplyScalar(B(1.4)) },
@@ -493,8 +500,8 @@ export function buildTrack(def, opts = {}) {
   const sunMat = own(new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(th.sun).multiplyScalar(B(1.2)), fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
   const sun = new THREE.Sprite(sunMat); sun.scale.set(300, 300, 1); sun.position.copy(sunDir).multiplyScalar(1100); sky.add(sun);
 
-  // nubes cercanas con volumen (más claras por arriba)
-  {
+  // nubes cercanas con volumen (más claras por arriba; en el espacio no hay)
+  if (!th.space) {
     const g = own(new THREE.IcosahedronGeometry(1, 1)), P = g.attributes.position, cc = new Float32Array(P.count * 3);
     const shade = cloudC.clone().lerp(new THREE.Color(th.skyTop), 0.45), c = new THREE.Color();
     for (let i = 0; i < P.count; i++) { c.copy(shade).lerp(cloudC, smooth(-0.5, 0.6, P.getY(i))); cc[i * 3] = c.r; cc[i * 3 + 1] = c.g; cc[i * 3 + 2] = c.b; }

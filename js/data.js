@@ -206,13 +206,67 @@ export const TRACKS = [
     deepAll: true, tunnel: [0.61, 0.68], ringsAt: [0.14, 0.25, 0.38, 0.5, 0.75, 0.88], ramps: [],
     extras: { weather: 'none', hazard: 'crab', life: null, liquidMode: 0, lamp: 0x7ff0ff, deck: 0x6a7a9a, tunnelCol: 0x4a6a8a, tunnelGlow: 0x7ff0ff, puddle: null, mark: 0x2a3a5a, ambience: '' },
   },
+  {
+    // Copa Galaxia · desierto: oasis en barco, pirámide-túnel, cañón en ala delta y un tramo largo de dunas
+    id: 'desierto', name: 'Dunas Doradas', cup: 3, R: 329, width: 15.5,
+    waves: [[2, 0.174, 3.6], [3, 0.092, 2.6], [7, 0.039, 4.97]], seed: 113,
+    theme: {
+      skyTop: 0x1e6fe0, skyBottom: 0xffe2a8, fog: 0xf7d9a0, fogNear: 150, fogFar: 560,
+      ground: 0xf2c46a, ground2: 0xe0a850, liquid: 0x19c8c0, liquidLevel: -2, liquidGlow: 0,
+      road: '#5c4658', line: '#ffe9a8', curbA: 0xe8502a, curbB: 0xfff3d0,
+      sun: 0xfff1c0, light: 1.4, ambientSky: 0xfff0d0, ambientGround: 0xd89a50,
+      props: [['cactus', 120], ['mesa', 50], ['drybush', 90], ['rock', 40], ['flower', 30]],
+      shore: 0xb8d878, rock: 0xc8804a, peak: 0xffdc98, cloudAmt: 0.2,
+      fx: 'fireflies', fxColor: 0xfff0c0, hills: 30, mountains: 0xd8905a, clouds: 0xffffff,
+    },
+    music: { tempo: 128, root: 57, scale: 'arabic', prog: [0, 1, 0, 6], seed: 88, style: 'desert' },
+    hills: [[0, 0], [0.05, 1], [0.215, 5], [0.275, 7], [0.345, 9], [0.52, 7.5], [0.585, 7.5], [0.65, 4], [0.72, 6.5], [0.79, 3], [0.86, 4.5], [0.9, 3.5], [0.96, 0.8], [1, 0]],
+    boat: [0.085, 0.15], glide: [0.4, 0.46, 15, 6], tunnel: [0.275, 0.345], bridge: [0.52, 0.585], ramps: [0.215, 0.9],
+    extras: { weather: 'sandstorm', hazard: 'tumbleweed', life: 'birds', liquidMode: 0, lamp: 0xffb84a, deck: 0xc98a4a, tunnelCol: 0xd8a860, tunnelGlow: 0xffd21f, puddle: null, mark: 0x2a1c20, ambience: 'desert' },
+  },
+  {
+    // Copa Galaxia · fábrica de juguetes: tanque de pintura en submarino, nave de la fábrica (túnel) y río de pintura en barco
+    id: 'fabrica', name: 'Fábrica de Juguetes', cup: 3, R: 331, width: 16,
+    waves: [[4, 0.082, 3.03], [5, 0.057, 6.14], [9, 0.025, 4.54]], seed: 127,
+    theme: {
+      skyTop: 0x2f8cff, skyBottom: 0xffeaf6, fog: 0xe6f4ff, fogNear: 150, fogFar: 560,
+      ground: 0x3ed6c8, ground2: 0x2cb8d8, liquid: 0xff5ec4, liquidLevel: -1.6, liquidGlow: 0,
+      road: '#d8433f', line: '#ffffff', curbA: 0xffd21f, curbB: 0x2b6cff,
+      sun: 0xffffff, light: 1.3, ambientSky: 0xeaf6ff, ambientGround: 0x7ad0c0,
+      props: [['toyblock', 80], ['toybrick', 70], ['gear', 46], ['crayon', 70], ['toyball', 60]],
+      shore: 0xfff6d8, rock: 0xff8a5a, peak: 0xfff27a, cloudAmt: 0.45,
+      fx: 'bubbles', fxColor: 0xffffff, hills: 18, mountains: 0xff7ab8, clouds: 0xffffff,
+    },
+    music: { tempo: 146, root: 60, scale: 'major', prog: [0, 3, 4, 0], seed: 95, style: 'toy' },
+    hills: [[0, 0], [0.06, 1.5], [0.075, 2], [0.135, 2], [0.17, 3], [0.385, 4], [0.43, 6], [0.5, 8], [0.57, 9], [0.65, 6], [0.72, 7.5], [0.79, 2], [0.925, 2.5], [0.97, 0.6], [1, 0]],
+    bridge: [0.075, 0.135], sub: [0.215, 0.345, 0.04, 6], tunnel: [0.43, 0.5], boat: [0.815, 0.875], ramps: [0.17, 0.385, 0.925],
+    extras: { weather: 'confetti', hazard: 'windup', life: 'planes', liquidMode: 0, lamp: 0xffd21f, deck: 0xffc86a, tunnelCol: 0x7a5cff, tunnelGlow: 0xffe45a, puddle: 0xff8ad8, mark: 0x3a1420, ambience: 'factory' },
+  },
+  {
+    // Copa Galaxia · estación espacial: dos paseos espaciales largos en ala delta, túnel de cristal y poca gravedad
+    id: 'estacion', name: 'Estación Estelar', cup: 3, R: 330, width: 15.5, gravity: 0.45,
+    waves: [[3, 0.117, 0.72], [4, 0.063, 5.54], [7, 0.04, 4.22]], seed: 139,
+    theme: {
+      skyTop: 0x02030d, skyBottom: 0x241a5e, fog: 0x100c30, fogNear: 140, fogFar: 560,
+      ground: 0x8a90b8, ground2: 0x6a7098, liquid: 0x4a2aa8, liquidLevel: -10, liquidGlow: 1,
+      road: '#3a4262', line: '#ffffff', curbA: 0xff7a1a, curbB: 0xf4f6ff,
+      sun: 0xfff6e0, light: 1.25, ambientSky: 0x9aa8ff, ambientGround: 0x4a4a80,
+      props: [['moonrock', 110], ['crater', 50], ['stmodule', 36], ['antenna', 40], ['solarpanel', 46], ['crystal', 30]],
+      shore: 0x3a3a66, rock: 0x55597a, peak: 0xc8cce8, cloudAmt: 0,
+      fx: 'stars', fxColor: 0x9fb8ff, hills: 9, mountains: 0x3a3e66, clouds: 0x2a2060, space: true, propGlow: 0x7ff0ff,
+    },
+    music: { tempo: 120, root: 59, scale: 'minor', prog: [0, 5, 3, 4], seed: 103, style: 'space' },
+    hills: [[0, 0], [0.03, 1], [0.25, 6], [0.29, 5], [0.37, 4], [0.415, 5], [0.66, 3], [0.74, 5], [0.82, 2], [0.9, 2.5], [0.96, 0.6], [1, 0]],
+    glide: [[0.095, 0.21, 11, 7], [0.47, 0.59, 13, 6]], tunnel: [0.29, 0.37], ramps: [0.25, 0.415, 0.9],
+    extras: { weather: 'stars', hazard: 'asteroid', life: null, liquidMode: 5, lamp: 0x7ff0ff, deck: 0x8a90b8, tunnelCol: 0x9ab8ff, tunnelGlow: 0x7ff0ff, tunnelGlass: true, puddle: null, mark: 0x10142a, ambience: 'space' },
+  },
 ];
 
 // Pistas que no aparecen en las listas de carrera
 export const EXTRA_TRACKS = [
   {
     // pista pequeña y ancha para la batalla de globos (no aparece en las listas de carrera)
-    id: 'arena', name: 'Arena Gorila', cup: -1, hidden: true, R: 108, width: 26,
+    id: 'arena', name: 'Arena Gorila', cup: -1, hidden: true, arena: true, R: 108, width: 26,
     waves: [[2, 0.1, 0.5]], seed: 5,
     theme: {
       skyTop: 0x2a7bff, skyBottom: 0xffe2b0, fog: 0xffd8b0, fogNear: 120, fogFar: 480,
@@ -227,12 +281,47 @@ export const EXTRA_TRACKS = [
     hills: [[0, 0], [1, 0]], ramps: [0.25, 0.75], noShortcut: true,
     extras: { weather: 'none', hazard: null, life: 'birds', liquidMode: 0, lamp: 0xff4fd8, deck: 0x9a6a3a, tunnelCol: 0x6f7f6a, tunnelGlow: 0xffd98a, puddle: null, mark: 0x15151c, ambience: 'jungle' },
   },
+  {
+    // arena de hielo al atardecer: triángulo redondeado con lomas suaves
+    id: 'arena2', name: 'Arena Glaciar', cup: -1, hidden: true, arena: true, R: 112, width: 26,
+    waves: [[3, 0.13, 0.4]], seed: 131,
+    theme: {
+      skyTop: 0x33268a, skyBottom: 0xffb8d8, fog: 0xdccbff, fogNear: 120, fogFar: 480,
+      ground: 0xeef6ff, ground2: 0xbcd8ff, liquid: 0x58c8ff, liquidLevel: -2, liquidGlow: 0,
+      road: '#6f8fc8', line: '#ffffff', curbA: 0x7a5cff, curbB: 0xffffff,
+      sun: 0xffe0f0, light: 1.25, ambientSky: 0xe6e0ff, ambientGround: 0x9ab8ff,
+      props: [['icecrystal', 60], ['pine', 40], ['snowman', 14], ['rock', 20]],
+      shore: 0xcdeaff, rock: 0x8fa4d8, peak: 0xffffff, cloudAmt: 0.4,
+      fx: 'snow', fxColor: 0xffffff, hills: 13, mountains: 0x9aa8ff, clouds: 0xffd8ee, stars: true, propGlow: 0x9fe6ff,
+    },
+    music: { tempo: 146, root: 57, scale: 'minor', prog: [0, 5, 3, 4], seed: 117, style: 'temple' },
+    hills: [[0, 0], [0.17, 2.5], [0.33, 0], [0.5, 2.5], [0.67, 0], [0.83, 2.5], [1, 0]], ramps: [0.17, 0.67], noShortcut: true,
+    extras: { weather: 'none', hazard: null, life: null, liquidMode: 0, lamp: 0x9fe6ff, deck: 0xbfe6ff, tunnelCol: 0x9fd6ff, tunnelGlow: 0xcff4ff, puddle: null, mark: 0x26304a, ambience: 'ice' },
+  },
+  {
+    // arena de lava de noche: anillo de cuatro lóbulos alrededor de un cráter
+    id: 'arena3', name: 'Arena Volcán', cup: -1, hidden: true, arena: true, R: 106, width: 27,
+    waves: [[4, 0.07, 0.8], [1, 0.045, 2.0]], seed: 149,
+    theme: {
+      skyTop: 0x16060f, skyBottom: 0xc8381a, fog: 0x8a2a1a, fogNear: 110, fogFar: 440,
+      ground: 0x4a2a36, ground2: 0x2e1a26, liquid: 0xff5a00, liquidLevel: -1.6, liquidGlow: 1,
+      road: '#3a2c38', line: '#ff9a1f', curbA: 0xff3b1a, curbB: 0x1a1218,
+      sun: 0xff9a50, light: 1.32, ambientSky: 0xff8a5a, ambientGround: 0x7a2a2a,
+      props: [['lavarock', 60], ['deadtree', 26], ['crystal', 30], ['rock', 30]],
+      shore: 0x1e1218, rock: 0x4a3440, peak: 0x7a3a3a, cloudAmt: 0.6,
+      fx: 'embers', fxColor: 0xffa23a, hills: 15, mountains: 0x3a1424, clouds: 0x5a2434, propGlow: 0xff5a1a,
+    },
+    music: { tempo: 150, root: 50, scale: 'minor', prog: [0, 5, 3, 4], seed: 123, style: 'volcano' },
+    hills: [[0, 0], [0.3, 3], [0.55, 0.5], [0.8, 3], [1, 0]], ramps: [0.3, 0.8], noShortcut: true,
+    extras: { weather: 'none', hazard: null, life: null, liquidMode: 1, lamp: 0xff6a1a, deck: 0x4a3a44, tunnelCol: 0x3a2630, tunnelGlow: 0xff7a1a, puddle: null, mark: 0x0c0a0e, ambience: 'volcano' },
+  },
 ];
 
 export const CUPS = [
   { id: 'platano', name: 'Copa Plátano', icon: '🍌', tracks: ['selva', 'playa', 'volcan'] },
   { id: 'diamante', name: 'Copa Diamante', icon: '💎', tracks: ['hielo', 'neon', 'arcoiris'] },
   { id: 'aventura', name: 'Copa Aventura', icon: '🧭', tracks: ['nubes', 'oceano', 'abismo'] },
+  { id: 'galaxia', name: 'Copa Galaxia', icon: '🚀', tracks: ['desierto', 'fabrica', 'estacion'] },
 ];
 
 export const DIFFICULTIES = [

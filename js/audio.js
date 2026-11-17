@@ -9,7 +9,7 @@ let musicTimer = null, song = null, nextStepTime = 0, stepIdx = 0, intensity = 0
 let amb = null, ambWant = null, hapticsOn = true;
 const vol = { music: 0.6, sfx: 0.8 }, MUSIC_LEVEL = 0.7;
 
-const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10] };
+const SCALES = { major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], arabic: [0, 1, 4, 5, 7, 8, 10] };
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -419,6 +419,46 @@ const AMBS = {
       lfo(a, 0.17, 'sine', hum(a, 2093, 'sine', 0.004).gain, 0.004, hum(a, 3136, 'sine', 0.003).gain, -0.003);          // brillo
     },
     ev(d) { const n = 1 + ((Math.random() * 3) | 0); for (let i = 0; i < n; i++) fm(mtof(pick([72, 74, 76, 79, 81, 84, 86, 88])), 1.6, 0.045, d, i * rnd(0.1, 0.3), 3.5, 2, 0.5); } }, // campanillas
+  desert: { gap: [2.5, 7], wx: 0.45,
+    build(a) {
+      const w = bed(a, 'bandpass', 480, 1.2, 0.09), g = bed(a, 'bandpass', 900, 2.5, 0.7, a.wx);
+      lfo(a, 0.07, 'sine', w.f.frequency, 180, w.g.gain, 0.045);                                                        // viento seco
+      bed(a, 'highpass', 5200, 0.5, 0.005);                                                                             // arena que roza
+      lfo(a, 0.27, 'sine', g.f.frequency, 380, g.g.gain, 0.3);                                                          // tormenta de arena
+    },
+    ev(d) {
+      const k = Math.random();
+      if (k < 0.4) tone(2300, 0.5, 'triangle', 0.03, d, 0, 1500, 0.05, 30, 90);                                         // grito de ave rapaz
+      else if (k < 0.75) { const f = rnd(700, 1100); tone(f, 1.7, 'sine', 0.016, d, 0, f * 0.8, 0.7); }                 // silbido del viento
+      else for (let i = 0; i < 12; i++) tone(4300, 0.02, 'square', 0.01, d, i * 0.035);                                 // cascabel
+    } },
+  factory: { gap: [0.6, 2.2],
+    build(a) {
+      hum(a, 55, 'sawtooth', 0.055, 240);                                                                               // motores
+      lfo(a, 2.3, 'square', bed(a, 'bandpass', 1400, 3, 0.05).g.gain, 0.05);                                            // traqueteo de la cinta
+      bed(a, 'lowpass', 500, 0.5, 0.05);
+    },
+    ev(d) {
+      const k = Math.random();
+      if (k < 0.3) fm(rnd(300, 600), 0.35, 0.06, d, 0, 2.76, 3, 0.1);                                                   // golpe metálico
+      else if (k < 0.5) noise(0.6, 0.045, 'highpass', 4500, 2500, d, 0, 0.05);                                          // vapor
+      else if (k < 0.7) { tone(1500, 0.09, 'sine', 0.05, d, 0, 2400); tone(2400, 0.12, 'sine', 0.05, d, 0.1, 1500); }   // juguete que pita
+      else if (k < 0.87) for (let i = 0; i < 3; i++) fm(mtof(pick([72, 76, 79, 84, 88])), 0.8, 0.04, d, i * 0.16, 3.5, 2, 0.4); // caja de música
+      else tone(180, 0.4, 'sine', 0.07, d, 0, 430, 0.01, 18, 40);                                                       // muelle
+    } },
+  space: { gap: [2, 6],
+    build(a) {
+      hum(a, 48, 'sine', 0.06); hum(a, 96.4, 'triangle', 0.018, 400);                                                   // zumbido de la estación
+      const w = bed(a, 'bandpass', 300, 1.5, 0.02);
+      lfo(a, 0.05, 'sine', w.f.frequency, 120, w.g.gain, 0.012);                                                        // ventilación
+      lfo(a, 0.13, 'sine', hum(a, 1568, 'sine', 0.003).gain, 0.003);                                                    // brillo lejano
+    },
+    ev(d) {
+      const k = Math.random();
+      if (k < 0.4) { tone(1320, 1.4, 'sine', 0.04, d, 0, 1300, 0.005); tone(1320, 1.2, 'sine', 0.014, d, 0.42, 1300, 0.005); } // sonar
+      else if (k < 0.75) for (let i = 0; i < 4 + ((k * 40) | 0) % 4; i++) tone(pick([1760, 2093, 2637, 3136]), 0.05, 'square', 0.011, d, i * 0.09); // radio
+      else tone(300, 1.8, 'sine', 0.02, d, 0, 1200, 0.6);                                                               // barrido
+    } },
 };
 
 function killAmbience() {
@@ -520,6 +560,15 @@ const STYLES = {
   temple: { sw: 0, kick: '9.....9.9.....9.', sn: '....8.......8.6.', hat: '6.6.6.6.6.6.6.6.', perc: 's.sss.sss.sss.ss',
     bass: 'r.o.r.o.f.o.r.o.', bl: 1.4, arp: '0231023102310232', ai: 'glock', ao: 2, ag: 0.035, lead: 'chip', lo: 1, lg: 0.1,
     pad: ['triangle', 2000, 0.2, 0.035], dly: 0.22, rev: 0.3, mel: ['x-x-x-x-x---x-x-', 'x-xx-x-xx-x-x---', 'x---x-x-x-x-x---'] },
+  desert: { sw: 0.06, kick: '9.......8.....5.', sn: '....5.......6...', hat: '5.3.5.3.5.3.5.35', perc: '..h...h.j...h.jj',
+    bass: 'r.....r.f...r...', bl: 2.5, arp: '0.1.2.1.0.1.3.1.', ai: 'pluck', ao: 0, ag: 0.06, lead: 'flute', lo: 1, lg: 0.12, roll: 1,
+    pad: ['triangle', 1400, 0.3, 0.035], dly: 0.2, rev: 0.3, mel: ['x-xx-x--x-xx-x--', 'x--x-xx-x---x-x-', 'x---x-x-x-xxx---'] },
+  toy: { sw: 0.12, kick: '9...6...9...6.6.', sn: '....7.......7...', hat: '5.5.5.5.5.5.5.55', perc: 'b..b..b...b.b.c.',
+    bass: 'r...f...r...f.o.', bl: 1.2, arp: '0.2.1.2.0.2.3.2.', ai: 'marimba', ao: 1, ag: 0.07, lead: 'glock', lo: 1, lg: 0.18,
+    stab: '..x...x...x...x.', sp: ['square', 2000, 0, 0.03], dly: 0.18, rev: 0.22, mel: ['x-x-xx-.x-x-xx-.', 'xx-xx-x-x---x-x-', 'x-x-x-x-x--x--x-'] },
+  space: { sw: 0, kick: '8.......8.....6.', sn: '....6.......6...', hat: '3.2.3.2.3.2.3.2.', perc: '......o.......o.',
+    bass: 'r.......r...f...', bw: 'saw', bl: 3.5, arp: '0.2.3.5.3.2.3.2.', ai: 'bell', ao: 1, ag: 0.032, lead: 'ep', lo: 1, lg: 0.13,
+    pad: ['sawtooth', 1000, 0.6, 0.05], dly: 0.34, rev: 0.5, mel: ['x---x---x-x-----', 'x-----x-x---x---', 'x-------x---x-x-'] },
   podium: { sw: 0.08, kick: '9.....9.9...9...', sn: '....8..5....8.55', hat: '6.3.6.3.6.3.6.3.', perc: '....c.......c...',
     bass: 'r...f...r...f.o.', bl: 2.5, arp: '0.2.3.2.1.3.2.3.', ai: 'glock', ao: 2, ag: 0.03, lead: 'brass', lo: 1, lg: 0.11,
     pad: ['sawtooth', 1100, 0.08, 0.03], stab: 'x.....x.x.......', sp: ['sawtooth', 1800, 0, 0.035], dly: 0.15, rev: 0.35, mel: ['x--xx---x--xx---', 'x-x-x---x--xx---', 'x---x---x-x-x-x-'] },
