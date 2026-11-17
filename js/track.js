@@ -1,5 +1,6 @@
 // Generación del circuito: trazado con desnivel, puentes, túneles, rampas, terreno y decorado.
 import * as THREE from './vendor/three.module.min.js';
+import { t as i18n } from './i18n.js';
 import { rng } from './data.js';
 import { PROPS, canvasTex, glowTex, merged } from './models.js';
 import { buildScenery } from './scenery.js';
@@ -228,10 +229,20 @@ export function buildTrack(def, opts = {}) {
       shortcut = { i0: bi, i1: bi + span, side, lat: side * (hw + 4.6), ex: a0.x + a0.nx * side * (hw + 4.6), ez: a0.z + a0.nz * side * (hw + 4.6), ey: a0.y,
         lx: b0.x + b0.nx * side * (hw - 3), lz: b0.z + b0.nz * side * (hw - 3), ly: b0.y, lh: b0.h, llat: side * (hw - 3) };
       const pad = new THREE.Group(); pad.position.set(shortcut.ex, a0.y, shortcut.ez); pad.rotation.y = Math.atan2(shortcut.lx - shortcut.ex, shortcut.lz - shortcut.ez);
-      const pm = new THREE.Mesh(own(merged([[cylG(2.6, 3.0, 0.5, 14), 0x2a2238, [0, 0.25, 0]], [cylG(0.07, 0.07, 4.4, 5), 0xf0f0f0, [-2.6, 2.2, 0]], [new THREE.BoxGeometry(3.4, 1.3, 0.2), 0x35e08a, [-2.6, 4.2, 0], null, [0, 0, 0]]])), own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+      // plataforma con muelle bajo un arco con cartel, y flechas en el arcén que llevan hasta ella
+      const pm = new THREE.Mesh(own(merged([[cylG(2.6, 3.0, 0.5, 14), 0x2a2238, [0, 0.25, 0]], [cylG(0.16, 0.2, 6.4, 6), 0xf0f0f0, [-3.5, 3.2, 0]], [cylG(0.16, 0.2, 6.4, 6), 0xf0f0f0, [3.5, 3.2, 0]],
+        [new THREE.BoxGeometry(7.4, 1.8, 0.24), 0x1a0b3a, [0, 5.7, 0]]])), own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+      pm.castShadow = shadows;
       const glow = new THREE.Mesh(own(cylG(2.2, 2.2, 0.12, 14)), own(new THREE.MeshBasicMaterial({ color: new THREE.Color(0x35e08a).multiplyScalar(B(2)) }))); glow.position.y = 0.56;
-      const signT = own(canvasTex(128, 48, (c) => { c.fillStyle = '#35e08a'; c.fillRect(0, 0, 128, 48); c.fillStyle = '#1a0b3a'; c.font = 'italic 900 30px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ATAJO »', 64, 26); }));
-      const sign = new THREE.Mesh(own(new THREE.PlaneGeometry(3.3, 1.2)), own(new THREE.MeshBasicMaterial({ map: signT, side: THREE.DoubleSide }))); sign.position.set(-2.6, 4.2, 0.12); sign.rotation.y = Math.PI;
+      const signT = own(canvasTex(256, 56, (c) => { c.fillStyle = '#35e08a'; c.fillRect(0, 0, 256, 56); c.fillStyle = '#1a0b3a'; c.font = 'italic 900 38px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(i18n('ATAJO') + ' »', 128, 30); }));
+      const sign = new THREE.Mesh(own(new THREE.PlaneGeometry(7, 1.5)), own(new THREE.MeshBasicMaterial({ map: signT, side: THREE.DoubleSide }))); sign.position.set(0, 5.7, -0.14); sign.rotation.y = Math.PI;
+      const arrows = [];
+      for (let k = 1; k <= 3; k++) {
+        const q = samples[bi - k * 5], lat = side * (hw + 4.6 - k * 0.9), nxt = samples[bi - (k - 1) * 5], nl = side * (hw + 4.6 - (k - 1) * 0.9);
+        const ax = q.x + q.nx * lat, az = q.z + q.nz * lat, hd = Math.atan2(nxt.x + nxt.nx * nl - ax, nxt.z + nxt.nz * nl - az);
+        arrows.push([new THREE.ConeGeometry(1.25, 2.6, 3), 0xffffff, [ax, q.y + 0.14, az], [1, 1, 0.06], [Math.PI / 2, 0, -hd]]);
+      }
+      const am = new THREE.Mesh(own(merged(arrows)), own(new THREE.MeshBasicMaterial({ color: new THREE.Color(0x35e08a).multiplyScalar(B(1.8)) }))); group.add(am);
       pad.add(pm, glow, sign); group.add(pad); shortcut.glow = glow;
     }
   }

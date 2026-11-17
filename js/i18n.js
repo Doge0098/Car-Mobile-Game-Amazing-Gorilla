@@ -30,7 +30,10 @@ function toEn(s) {
     const m = p.re.exec(s);
     if (m) { out = p.en; p.names.forEach((n, i) => { out = out.split('{' + n + '}').join(toEn(m[i + 1])); }); break; }
   }
-  if (out === undefined) { out = s; for (const [re, en] of WORDS) out = out.replace(re, (m, pre) => pre + en); }
+  if (out === undefined) {
+    out = s; for (const [re, en] of WORDS) out = out.replace(re, (m, pre) => pre + en);
+    if (out === s && typeof window !== 'undefined' && window.__i18nMiss) window.__i18nMiss.add(s); // solo en las pruebas
+  }
   if (cache.size > 3000) cache.clear();
   cache.set(s, out);
   return out;

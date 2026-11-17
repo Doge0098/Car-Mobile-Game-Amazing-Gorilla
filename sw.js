@@ -1,5 +1,5 @@
 // Service worker: guarda todo el juego para jugar sin conexión.
-const VERSION = 'agr-v5';
+const VERSION = 'agr-v6';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/main.js', 'js/data.js', 'js/save.js', 'js/audio.js', 'js/input.js', 'js/track.js',

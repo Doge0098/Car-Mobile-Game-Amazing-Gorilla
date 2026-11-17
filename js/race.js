@@ -88,7 +88,7 @@ class Racer {
 
   // by: corredor que provoca el golpe (para contar los golpes dados); sin él es un obstáculo del mapa
   hit(by) {
-    if (this.furyT > 0 || this.spinT > 0 || this.flight || this.out) return false;
+    if (this.furyT > 0 || this.spinT > 0 || this.flight || this.out || this.graceT > 0) return false;
     const race = this.race, fx = race.fx;
     if (this.shieldT > 0) {
       this.shieldT = 0;
@@ -277,7 +277,7 @@ class Racer {
     if (race.state === 'racing' || race.state === 'finished') this.pickups(dt);
     if (this.rolling > 0) {
       this.rolling -= dt;
-      if (this.rolling <= 0) { this.item = race.rollItem(this); this.itemCount = 1; this.useDelay = 1 + Math.random() * 3.5; if (this.isPlayer) sfx.item(); }
+      if (this.rolling <= 0) { this.item = race.rollItem(this); this.itemCount = 1; this.useDelay = race.mode === 'battle' ? 3 + Math.random() * 6 : 1 + Math.random() * 3.5; if (this.isPlayer) sfx.item(); }
     }
     if (!this.finished && this.prog >= race.laps * N && (race.state === 'racing' || race.state === 'finished')) race.finishRacer(this);
   }
@@ -491,6 +491,7 @@ export class Race {
     if (this.rivalDef && !solo) {
       const rv = this.racers.find(r => !r.isPlayer && r.char.id === this.rivalDef.char);
       if (rv) { rv.isRival = true; rv.skill = clamp(0.006 + this.rivalDef.level * 0.011, -0.03, 0.075); this.rival = rv; this.rivalTag = rivalTag(); rv.root.add(this.rivalTag); }
+      this.rivalTagY = this.mode === 'battle' ? 5.9 : 4.5; // por encima de los globos
     }
     const wOpts = { scene: this.scene, track: tr, fx: this.fx, quality: this.quality, B: k => (this.bloom ? k : 1), shadows: this.shadows, rand: rng(def.seed * 7 + 5), onEvent: (e, d) => this.emit(e, d) };
     // en contrarreloj no hay obstáculos ni meteoritos: la vuelta debe depender solo del piloto
@@ -914,7 +915,7 @@ export class Race {
       const ahead = this.rival.pos < p.pos;
       if (this.rivalAhead !== null && ahead !== this.rivalAhead && this.time > 6) { this.emit('rival', ahead); if (ahead) this.voice(this.rival, 'laugh'); }
       this.rivalAhead = ahead;
-      if (this.rivalTag) this.rivalTag.position.y = 4.5 + Math.sin(this.t * 4) * 0.15 + this.rival.hopY;
+      if (this.rivalTag) this.rivalTag.position.y = this.rivalTagY + Math.sin(this.t * 4) * 0.15 + this.rival.hopY;
     }
     if (this.state === 'racing' || (this.state === 'finished' && this.stateT < 2.5)) this.replay.record(dt);
     for (const r of this.live) r.visuals(dt, this.t);
@@ -979,9 +980,9 @@ export class Race {
       const vh = p.speed > 8 ? Math.atan2(p.vx, p.vz) : p.h;
       const target = p.h + wrapA(vh - p.h) * 0.55;
       this.camH += wrapA(target - this.camH) * Math.min(1, dt * 5.5);
-      const sk = clamp(p.speed / p.maxSpeed, 0, 1.4), d = (portrait ? 11.5 : 9) + sk * 1.2 - (p.boostT > 0 ? 0.8 : 0);
-      tx = p.x - Math.sin(this.camH) * d; tz = p.z - Math.cos(this.camH) * d; ty = by + (portrait ? 5.4 : 4.3) + p.hopY * (p.mode === 'glide' ? 0.9 : 0.35) + p.bob * 0.6 - p.slopeF * 4;
-      lx = p.x + Math.sin(this.camH) * 6; lz = p.z + Math.cos(this.camH) * 6; ly = by + 1.7 + p.slopeF * 6 + p.hopY * (p.mode === 'glide' ? 0.8 : 0.25) + p.bob * 0.6;
+      const sk = clamp(p.speed / p.maxSpeed, 0, 1.4), d = (portrait ? 11.5 : 9) + sk * 1.2 - (p.boostT > 0 ? 0.8 : 0), high = p.mode === 'glide' || !!p.flight; // en el aire la cámara sube con el coche
+      tx = p.x - Math.sin(this.camH) * d; tz = p.z - Math.cos(this.camH) * d; ty = by + (portrait ? 5.4 : 4.3) + p.hopY * (high ? 0.9 : 0.35) + p.bob * 0.6 - p.slopeF * 4;
+      lx = p.x + Math.sin(this.camH) * 6; lz = p.z + Math.cos(this.camH) * 6; ly = by + 1.7 + p.slopeF * 6 + p.hopY * (high ? 0.8 : 0.25) + p.bob * 0.6;
       fov = 66 + sk * 8 + (p.boostT > 0 ? 13 : 0);
     }
     cam.position.set(tx, ty, tz);

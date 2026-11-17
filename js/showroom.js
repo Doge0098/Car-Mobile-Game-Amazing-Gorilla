@@ -39,14 +39,14 @@ export function buildShowroom(scene) {
   const geos = { palm: PROPS.palm.make(), tree: PROPS.tree.make(), rock: PROPS.rock.make(), mushroom: PROPS.mushroom.make(), flower: PROPS.flower.make() };
   for (const [x, z, s] of [[-13, -9, 1.3], [14, -12, 1.5], [-22, -20, 1.6], [24, -24, 1.4], [-8, -22, 1.2], [9, -26, 1.3]]) place('palm', x, z, s);
   for (const [x, z, s] of [[-18, -14, 1.2], [19, -17, 1.4], [0, -32, 1.8], [-30, -30, 1.7], [32, -32, 1.6]]) place('tree', x, z, s);
-  for (const [x, z, s] of [[-9, -6, 1.1], [10.5, -7, 1.3], [-15, -3, 0.8]]) place('rock', x, z, s);
+  for (const [x, z, s] of [[-9, -6, 1.1], [10.5, -7, 1.3], [-17, -6, 0.8]]) place('rock', x, z, s);
   for (const [x, z, s] of [[-7, -8, 1.4], [12, -4, 1.1]]) place('mushroom', x, z, s);
-  for (let i = 0; i < 26; i++) { const a = rnd() * 6.28, r = 5.5 + rnd() * 12; const m = new THREE.Mesh(geos.flower, veg); m.position.set(Math.cos(a) * r, -0.5, Math.sin(a) * r - 4); m.scale.setScalar(0.8 + rnd() * 0.8); scene.add(m); }
+  for (let i = 0; i < 34; i++) { const a = rnd() * 6.28, r = 5.5 + rnd() * 12; if (Math.sin(a) * r - 4 > 1.5) continue; /* nada entre la cámara y el coche */ const m = new THREE.Mesh(geos.flower, veg); m.position.set(Math.cos(a) * r, -0.5, Math.sin(a) * r - 4); m.scale.setScalar(0.8 + rnd() * 0.8); scene.add(m); }
 
   // banderines y focos
   const cols = [0xff4fd8, 0xffd21f, 0x22e6ff, 0x35e08a, 0xff7a1a, 0x7a5cff], bp = [];
-  for (const sx of [-11, 11]) bp.push([new THREE.CylinderGeometry(0.14, 0.18, 9, 6), 0xf0f0f0, [sx, 4, -5]]);
-  for (let k = 0; k < 19; k++) { const u = k / 18, x = -11 + u * 22; bp.push([new THREE.ConeGeometry(0.5, 1.0, 3), cols[k % 6], [x, 8.1 - Math.sin(u * Math.PI) * 1.6, -5], [1, 1, 0.15], [0, 0, Math.PI]]); }
+  for (const sx of [-15, 15]) bp.push([new THREE.CylinderGeometry(0.14, 0.18, 9, 6), 0xf0f0f0, [sx, 4, -8]]);
+  for (let k = 0; k < 25; k++) { const u = k / 24, x = -15 + u * 30; bp.push([new THREE.ConeGeometry(0.5, 1.0, 3), cols[k % 6], [x, 8.1 - Math.sin(u * Math.PI) * 1.8, -8], [1, 1, 0.15], [0, 0, Math.PI]]); }
   scene.add(new THREE.Mesh(merged(bp), veg));
   const beams = [], bg = new THREE.ConeGeometry(3.2, 26, 14, 1, true); bg.translate(0, -13, 0);
   for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: [0xffd21f, 0x22e6ff, 0xff4fd8][i], transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); m.position.set(-9 + i * 9, 17, -7); scene.add(m); beams.push(m); }

@@ -4,7 +4,7 @@ import * as A from './audio.js';
 
 const BAL_COL = [0xff3b4a, 0xffd21f, 0x22e6ff];
 let balGeo = null, strGeo = null;
-const balMats = BAL_COL.map(c => new THREE.MeshBasicMaterial({ color: c }));
+const balMats = BAL_COL.map(c => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.25 }));
 const strMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 export class Rules {
@@ -13,7 +13,7 @@ export class Rules {
     this.outOrder = []; this.timer = this.kind === 'elim' ? 22 : 150; this.period = 16; this.danger = false; this.over = false;
     race.laps = 999;
     if (this.kind === 'battle') {
-      race.boxRespawn = 1.6;
+      race.boxRespawn = 2.8;
       if (!balGeo) { balGeo = new THREE.SphereGeometry(0.42, 10, 8); strGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.5, 4); }
       for (const r of race.racers) {
         r.balloons = 3; r.balMeshes = [];
@@ -58,7 +58,7 @@ export class Rules {
   // Batalla: cada golpe revienta un globo
   onHit(r, by) {
     if (this.kind !== 'battle' || r.out || r.balloons <= 0) return;
-    r.balloons--;
+    r.balloons--; r.graceT = 3.2; // unos segundos de protección tras perder un globo
     const g = r.balMeshes[r.balloons]; g.visible = false;
     this.race.fx.add.burst(r.x, r.y + 3.6, r.z, 16, [BAL_COL[r.balloons], 0xffffff], 9, 8, 0.5, 8);
     if (r.isPlayer || r.near()) A.sfx.pop?.(r.isPlayer ? 0 : this.race.panOf(r.x, r.z), 1);
@@ -79,7 +79,7 @@ export class Rules {
   // Clasificación propia del modo
   rank() {
     const act = this.active();
-    if (this.kind === 'battle') act.sort((a, b) => b.balloons - a.balloons || (b.pops || 0) - (a.pops || 0));
+    if (this.kind === 'battle') act.sort((a, b) => b.balloons - a.balloons || (b.pops || 0) - (a.pops || 0) || (b.isPlayer ? 1 : 0) - (a.isPlayer ? 1 : 0)); // en los empates, el jugador delante
     else act.sort((a, b) => b.prog - a.prog);
     const arr = act.concat(this.outOrder.slice().reverse());
     arr.forEach((r, i) => { r.pos = i + 1; });
@@ -88,7 +88,12 @@ export class Rules {
 
   update(dt) {
     const race = this.race;
-    if (this.kind === 'battle') for (const r of race.racers) if (!r.out) for (const g of r.balMeshes) if (g.visible) g.rotation.x = Math.sin(race.t * 3 + g.userData.ph) * 0.12 - Math.min(0.5, r.speed * 0.006);
+    if (this.kind === 'battle') for (const r of race.racers) {
+      if (r.out) continue;
+      for (const g of r.balMeshes) if (g.visible) g.rotation.x = Math.sin(race.t * 3 + g.userData.ph) * 0.12 - Math.min(0.5, r.speed * 0.006);
+      // mientras dura la protección el coche parpadea
+      if (r.graceT > 0) { r.graceT -= dt; r.tilt.visible = r.graceT <= 0 || Math.sin(race.t * 28) > -0.2; }
+    }
     if (race.state !== 'racing' || this.over) return;
     this.timer -= dt;
     if (this.kind === 'elim') {

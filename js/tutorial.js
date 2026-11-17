@@ -38,7 +38,7 @@ export const LESSONS = [
     text: ['¡Rampa azul! Cuando estés en el aire, pulsa DERRAPE para hacer un truco.', '¡Ahora! Pulsa DERRAPE.'], stage: c => (c.p.air ? 1 : 0),
     start: c => c.rampAhead, done: c => c.st.tricks > 0 || c.p.trickDone, learned: c => c.st.tricks > 0, ok: '¡Truco! Al aterrizar ganas un impulso.' },
   { id: 'boat', urgent: true, max: 4, text: 'En el agua tu coche se transforma en barco. ¡Se conduce igual!', start: c => c.p.mode === 'boat' },
-  { id: 'glide', urgent: true, max: 4, text: '¡Ala delta! Gira para planear y pasa por los aros para ganar impulso.', start: c => c.p.mode === 'glide' },
+  { id: 'glide', urgent: true, max: 4, text: '¡Ala delta! DERRAPE sube y FRENO baja: pasa por los aros para ganar impulso.', start: c => c.p.mode === 'glide' },
   { id: 'sub', urgent: true, max: 4, text: 'Bajo el agua eres un submarino. Sigue los aros.', start: c => c.p.mode === 'sub' },
 ];
 

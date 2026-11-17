@@ -250,7 +250,8 @@ html, body {
 .toolbar .seg button { padding: 6px 12px; }
 .hud-mode { left: calc(16px + var(--sa-l)); top: calc(clamp(58px, 14.5vmin, 100px) + var(--sa-t)); font-size: clamp(14px, 3vmin, 20px); background: rgba(16, 6, 46, .7); padding: 3px 12px; border-radius: 999px; border: 2px solid var(--yellow); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hud-mode.danger { background: #e01b2f; border-color: #fff; animation: pulse .4s infinite alternate; transform-origin: left center; }
-.results li.out { opacity: .6; } .results li.rival b::after { content: ' ⚔️'; font-style: normal; font-size: 13px; }
+.results li.out { opacity: .6; } .results li.rival span:nth-child(2)::after { content: ' ⚔️'; }
+.cards.mirror .mini { transform: scaleY(-1); }
 .screen.replay { pointer-events: none; justify-content: space-between; align-items: flex-start; }
 .replay-tag { background: #e01b2f; border: 3px solid #fff; border-radius: 12px; padding: 4px 14px; font-style: italic; font-size: clamp(15px, 3.4vmin, 22px); animation: blink 1.2s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .35; } }

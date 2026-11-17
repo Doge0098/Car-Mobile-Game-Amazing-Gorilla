@@ -355,7 +355,7 @@ function onRaceEvent(ev, data) {
   }
   else if (ev === 'shortcut') hudMsg('¡Atajo! 🚀', true);
   else if (ev === 'current') { if (curHints++ < 2) hint(data === 1 ? 'Corriente a favor: ¡síguela para ir más rápido!' : 'Corriente lateral: ¡te empuja hacia un lado!'); }
-  else if (ev === 'out') { if (!data.isPlayer) hint(fill(t('💥 {name} queda fuera · quedan {left}'), data)); sfx.thud?.(0, 0.8); }
+  else if (ev === 'out') { if (!data.isPlayer) hint(fill(t('💥 {name} queda fuera · quedan {left}'), data)); sfx.thud?.(0, 0.8); $('hud-total').textContent = '/' + (data.left + (race.player.out ? 1 : 0)); }
   else if (ev === 'rival') { if (race.rival) hint(fill(t(data ? '⚔️ ¡{name} te ha adelantado!' : '⚔️ ¡Has adelantado a {name}!'), race.rival.char)); }
   else if (ev === 'lap') { hudMsg('Vuelta ' + data, true); sfx.lap(); sfx.crowd?.(0, 0.7); }
   else if (ev === 'finalLap') { hudMsg('¡Última vuelta!', true); sfx.finalLap(); A.setMusicIntensity?.(1); sfx.crowd?.(0, 0.9); }
@@ -441,7 +441,7 @@ function updateHud(dt) {
   const p = race.player;
   if (lastHud.pos !== p.pos) {
     if (lastHud.pos !== undefined) { const e = $('hud-pos').parentElement; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
-    lastHud.pos = p.pos; $('hud-pos').textContent = p.pos;
+    lastHud.pos = p.pos; $('hud-pos').textContent = p.pos; $('hud-pos-suf').textContent = lang() === 'en' ? ['st', 'nd', 'rd'][p.pos - 1] || 'th' : 'º';
   }
   setText('hud-lap', Math.max(1, Math.min(race.laps, Math.floor(p.prog / track.N) + 1)));
   setText('hud-time', fmt(race.time));
@@ -634,7 +634,7 @@ function buildTracks() {
   segSet('kind-seg', raceKind, v => { raceKind = v; buildTracks(); });
   segSet('variant-seg', variant, v => { variant = v; buildTracks(); });
   buildDiffSeg($('diff-seg'));
-  const box = $('track-cards'); box.innerHTML = '';
+  const box = $('track-cards'); box.innerHTML = ''; box.classList.toggle('mirror', variant === 'mirror');
   for (const t of TRACKS) { // (aquí t es el circuito; los textos los traduce el observador de i18n)
     const ok = trackUnlocked(t), c = document.createElement('button');
     c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t);
