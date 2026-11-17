@@ -463,7 +463,7 @@ export class Race {
     Object.assign(this, opts);
     this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
-    this.grav = 30 * (def.gravity || 1) * (this.gravityK || 1); this.adT = 0; // gravedad de los saltos (menor en el espacio)
+    this.grav = 30 * Math.max(0.4, (def.gravity || 1) * (this.gravityK || 1)); this.adT = 0; // gravedad de los saltos (menor en el espacio)
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
     this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = []; this.shocks = [];
     this.windColor = def.theme.fxColor;

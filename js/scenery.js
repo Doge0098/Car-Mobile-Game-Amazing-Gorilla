@@ -15,7 +15,7 @@ const ADS = [
 export function buildScenery(ctx) {
   const { th, ex, samples, N, hw, rand, own, group, B, quality, shadows, uTime, special, nearRamp, tunR, fIdx, boatRs, outline, terrainAt } = ctx;
   const boatR = boatRs[0] || null, subIdx = []; samples.forEach((q, i) => { if (q.zone === 'sub') subIdx.push(i); });
-  const toy = ctx.def.id === 'fabrica'; // el tanque de pintura lleva juguetes en vez de corales
+  const toy = (ctx.def.look || ctx.def.id) === 'fabrica'; // el tanque de pintura lleva juguetes en vez de corales
   const updaters = [];
   const S = i => samples[((i % N) + N) % N];
   const free = i => !special(S(i)) && !nearRamp(((i % N) + N) % N);
@@ -201,7 +201,7 @@ export function buildScenery(ctx) {
       sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>',
         '#include <begin_vertex>\n float bph = instanceMatrix[3].x * 0.5 + instanceMatrix[3].z * 0.3; float bk = smoothstep(0.3, 5.0, position.y);\n transformed.x += sin(uTime * 1.4 + bph) * 0.4 * bk; transformed.z += cos(uTime * 1.1 + bph) * 0.3 * bk;');
     };
-    const count = quality > 0.7 ? 22 : 12, im = new THREE.InstancedMesh(g, m, count);
+    const count = quality > 1.1 ? 30 : quality > 0.7 ? 22 : 12, im = new THREE.InstancedMesh(g, m, count);
     let n = 0, tries = 0;
     while (n < count && tries++ < 300) {
       const i = n < 6 ? N - 26 + n * 8 : Math.floor(rand() * N); if (!free(i)) continue;
@@ -326,7 +326,7 @@ export function buildScenery(ctx) {
       sh.uniforms.uTime = uTime;
       sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed.x += sin(uTime * 1.6 + instanceMatrix[3].x * 0.5 + position.y * 0.7) * 0.12 * position.y;');
     };
-    const count = quality > 0.7 ? 70 : 36;
+    const count = quality > 1.1 ? 96 : quality > 0.7 ? 70 : 36;
     const coral = new THREE.InstancedMesh(coralG, lambert(), count), weed = new THREE.InstancedMesh(weedG, weedM, count);
     for (let n = 0; n < count * 2; n++) {
       const s = pick(), lat = (hw + 3.5 + Math.pow(rand(), 1.6) * 34) * (rand() > 0.5 ? 1 : -1);
@@ -341,7 +341,7 @@ export function buildScenery(ctx) {
     const fishG = toy ? own(merged([[new THREE.IcosahedronGeometry(0.7, 1), 0xffd21f, [0, 0.35, 0], [0.85, 0.7, 1.2]], [new THREE.IcosahedronGeometry(0.42, 1), 0xffd21f, [0, 1.0, 0.5]],
       [new THREE.ConeGeometry(0.2, 0.45, 5), 0xff7a1a, [0, 0.95, 1.0], [1.3, 1, 0.6], [Math.PI / 2, 0, 0]], [new THREE.ConeGeometry(0.3, 0.6, 4), 0xffd21f, [0, 0.6, -0.9], [1, 1, 0.5], [-0.9, 0, 0]],
       [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [0.22, 1.12, 0.82]], [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [-0.22, 1.12, 0.82]]])) : own(merged([[new THREE.IcosahedronGeometry(0.5, 1), 0xffffff, null, [0.45, 0.75, 1.3]], [new THREE.ConeGeometry(0.4, 0.6, 4), 0xffffff, [0, 0, -0.85], [0.2, 1, 1], [-Math.PI / 2, 0, 0]], [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [0.2, 0.12, 0.5]], [new THREE.IcosahedronGeometry(0.08, 0), 0x16161c, [-0.2, 0.12, 0.5]]]));
-    const fc = quality > 0.7 ? 32 : 16, fish = new THREE.InstancedMesh(fishG, lambert(), fc), fl = [];
+    const fc = quality > 1.1 ? 44 : quality > 0.7 ? 32 : 16, fish = new THREE.InstancedMesh(fishG, lambert(), fc), fl = [];
     for (let i = 0; i < fc; i++) {
       const s = pick(), lat = (rand() - 0.5) * 40;
       fl.push({ cx: s.x + s.nx * lat, cz: s.z + s.nz * lat, y: toy ? th.liquidLevel - 0.1 : s.y + 2.5 + rand() * 5, r: 3 + rand() * 7, sp: (0.4 + rand() * 0.5) * (rand() > 0.5 ? 1 : -1) * (toy ? 0.5 : 1), ph: rand() * 6.28, sc: (0.6 + rand() * 0.8) * (toy ? 1.5 : 1) });
@@ -382,7 +382,7 @@ export function buildScenery(ctx) {
     const put = (g, m, sp, cast = true) => { const mesh = addMesh(g, m, cast); mesh.position.set(sp.x, sp.y, sp.z); mesh.rotation.y = sp.yaw; if (outline) addOutline(mesh); return mesh; };
     const glowM = c => own(new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(B(2)) }));
     const Bx = (x, y, z) => new THREE.BoxGeometry(x, y, z), Cy = (a, b, h, n = 10) => new THREE.CylinderGeometry(a, b, h, n), Co = (r, h, n = 10) => new THREE.ConeGeometry(r, h, n), Ic = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
-    const id = ctx.def.id;
+    const id = ctx.def.id; // el circuito sorpresa ('sorpresa') no lleva monumentos: su trazado cambia y podrían caer sobre la carretera
     // Edificios que cubren el túnel (pirámide, nave de la fábrica): sus paredes llevan el hueco exacto por donde pasa el tubo.
     // tubeCut: puntos donde la pared del túnel (radio entre su cara interior y la exterior) atraviesa un plano, entrando desde una boca.
     const tubeCut = (P0, Nn, atEnd) => {

@@ -33,7 +33,7 @@ export function surpriseTrack(seed) {
   const def = {
     id: 'sorpresa', name: 'Circuito Sorpresa', cup: -1, hidden: true, surprise: seed, look: base.id,
     R: 305 + Math.floor(r() * 26), width: 15 + Math.round(r() * 3) / 2, waves, seed: 100 + (seed % 899),
-    theme: base.theme, music: { ...base.music, seed: base.music.seed + (seed % 50) }, extras: base.extras, gravity: base.gravity,
+    theme: base.theme, music: { ...base.music, seed: base.music.seed + (seed % 50) }, extras: base.extras, // la gravedad es siempre la normal: el trazado no deja sitio para saltos largos
     hills: [[0, 0]], ramps: [], forkFirst: seed % 2 === 0,
   };
   const W = 0.145;
