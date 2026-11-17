@@ -27,6 +27,7 @@ const defaults = () => ({
   medals: {},        // contrarreloj: circuito[:variante] -> 1 bronce, 2 plata, 3 oro
   bosses: {},        // id de jefe -> 1 (derrotado)
   daily: { done: 0, streak: 0 }, // reto diario: último día superado (AAAAMMDD) y racha de días seguidos
+  retos: [],         // retos de amigos que ya no dan premio: huella corta de cada código superado o enviado (ver js/share.js)
   settings: {
     controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, outline: true, haptics: true,
     btnSize: 'm', lefty: false, btnAlpha: 1, // tamaño (s/m/l), modo zurdo y opacidad de los botones táctiles
@@ -38,7 +39,7 @@ const defaults = () => ({
 });
 
 const OBJECTS = ['settings', 'upgrades', 'trophies', 'best', 'ghosts', 'stats', 'achievements', 'rival', 'medals', 'bosses', 'daily'];
-const LISTS = ['chars', 'karts', 'hats', 'wheels', 'trails', 'horns', 'stickers', 'dances', 'emotes'];
+const LISTS = ['chars', 'karts', 'hats', 'wheels', 'trails', 'horns', 'stickers', 'dances', 'emotes', 'retos'];
 
 export let save = defaults();
 

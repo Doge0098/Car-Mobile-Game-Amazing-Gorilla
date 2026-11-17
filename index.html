@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Gorilla Racing">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/share.css">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/custom.css">
@@ -75,6 +76,7 @@
     <div class="seg" id="tod-seg"><button data-v="">☀️</button><button data-v="dusk">🌇</button><button data-v="night">🌙</button></div>
     <div class="seg" id="kind-seg"><button data-v="race">Carrera</button><button data-v="elim">Eliminación</button><button data-v="stunt">Acrobacias</button></div>
     <div class="seg" id="variant-seg"><button data-v="">Normal</button><button data-v="mirror">Espejo</button><button data-v="reverse">Inverso</button></div>
+    <button class="btn c7 small" id="tracks-reto">🤝 Introducir reto</button>
   </div>
   <div class="cards" id="track-cards"></div>
 </section>
@@ -191,7 +193,9 @@
       <b>Medallas:</b> en contrarreloj cada circuito tiene tiempos de bronce, plata y oro; la liebre dorada marca el ritmo del oro.<br>
       <b>Ayudas:</b> en Ajustes puedes activar la dirección asistida y el derrape automático.<br>
       <b>Rival:</b> un gorila te reta en cada carrera y se adapta a tu nivel. Si acabas por delante, hay premio extra.<br>
-      <b>Repetición y fotos:</b> al terminar puedes ver la repetición, y en la pausa hay un modo foto.<br>
+      <b>Repetición y fotos:</b> al terminar puedes ver la repetición (con los objetos y en todos los modos) y grabarla en vídeo; en la pausa hay un modo foto.<br>
+      <b>Retos entre amigos:</b> tras una contrarreloj, «Retar a un amigo» crea un enlace o un código con tu tiempo y tu fantasma.
+      Quien lo abra corre contra ti y, si te gana, se lleva un premio. No se sube nada a internet: el reto va dentro del propio enlace.<br>
       <b>Gráficos:</b> con la <b>calidad automática</b>, si el juego va lento se quitan solos sombras, contorno y resplandor. También puedes bajar el nivel a mano.<br>
       <b>Botones:</b> puedes cambiar su tamaño y su opacidad, o pasarlos al otro lado con el modo zurdo (dirección a la derecha).<br>
       <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, H = bocina, P = pausa.<br>
@@ -220,7 +224,9 @@
       <b>Medals:</b> in time trial every track has bronze, silver and gold times; the golden pace ghost shows the gold pace.<br>
       <b>Aids:</b> in Settings you can turn on assisted steering and automatic drift.<br>
       <b>Rival:</b> one gorilla challenges you in every race and adapts to your level. Finish ahead of them for a bonus.<br>
-      <b>Replay and photos:</b> watch a replay when a race ends, and use photo mode from the pause menu.<br>
+      <b>Replay and photos:</b> watch a replay when a race ends (items included, in every mode) and record it as a video; photo mode is in the pause menu.<br>
+      <b>Friend challenges:</b> after a time trial, “Challenge a friend” makes a link or a code with your time and your ghost.
+      Whoever opens it races against you and wins a prize for beating you. Nothing is uploaded: the challenge travels inside the link itself.<br>
       <b>Graphics:</b> with <b>automatic quality</b>, shadows, outline and glow are switched off by themselves if the game runs slowly. You can also lower the level by hand.<br>
       <b>Buttons:</b> you can change their size and opacity, or swap sides with left-handed mode (steering on the right).<br>
       <b>Keyboard:</b> arrows / A-D, Space = drift, E = item, H = horn, P = pause.<br>
@@ -314,6 +320,7 @@
     <div class="reward" id="r-reward"></div>
     <div class="rowbtns">
       <button class="btn c7" id="r-replay">🎬 Repetición</button>
+      <button class="btn c4 hidden" id="r-reto">📤 Retar a un amigo</button>
       <button class="btn c3" id="r-retry">↻ Repetir</button>
       <button class="btn c1" id="r-next">Continuar ▶</button>
     </div>
@@ -324,6 +331,8 @@
 <section id="s-replay" class="screen replay">
   <div class="replay-tag">● REPETICIÓN</div>
   <button class="btn c5 small" id="replay-skip">Saltar ▶</button>
+  <button class="btn c6 small hidden" id="replay-rec">⏺ Grabar vídeo</button>
+  <div class="hidden" id="replay-rec-tag"><i>●</i> <span>GRABANDO</span> <b id="replay-rec-time">0:00</b></div>
 </section>
 
 <!-- MODO FOTO -->
@@ -336,6 +345,52 @@
   </div>
 </section>
 
+<!-- RETOS ENTRE AMIGOS Y VÍDEO DE LA REPETICIÓN (js/share.js) -->
+<section id="s-reto" class="screen modal">
+  <div class="box">
+    <h2>🤝 Reto</h2>
+    <p class="ask" id="reto-text"></p>
+    <p class="reto-info" id="reto-info"></p>
+    <p class="reto-who" id="reto-who"></p>
+    <button class="btn c1" id="reto-yes">🏁 Aceptar el reto</button>
+    <button class="btn c5" id="reto-no" data-padback>Ahora no</button>
+  </div>
+</section>
+<section id="s-retoin" class="screen modal">
+  <div class="box">
+    <h2>🤝 Introducir reto</h2>
+    <p class="ask">Pega aquí el código o el enlace que te ha enviado tu amigo.</p>
+    <textarea class="reto-code" id="retoin-text" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off" data-noi18n></textarea>
+    <p class="reto-err" id="retoin-err"></p>
+    <div class="reto-row">
+      <button class="btn c3" id="retoin-paste">📋 Pegar</button>
+      <button class="btn c1" id="retoin-ok">Ver reto ▶</button>
+    </div>
+    <button class="btn c5" id="retoin-cancel" data-padback>Cancelar</button>
+  </div>
+</section>
+<section id="s-retoout" class="screen modal">
+  <div class="box">
+    <h2>📤 Retar a un amigo</h2>
+    <p class="ask">Envía el enlace a un amigo: correrá contra tu fantasma. También puede pegar este código en Contrarreloj.</p>
+    <p class="reto-info" id="retoout-info"></p>
+    <textarea class="reto-code" id="retoout-code" rows="2" readonly spellcheck="false" data-noi18n></textarea>
+    <div class="reto-row">
+      <button class="btn c1" id="retoout-share">📤 Enviar enlace</button>
+      <button class="btn c3" id="retoout-copy">📋 Copiar código</button>
+    </div>
+    <button class="btn c5" id="retoout-close" data-padback>Cerrar</button>
+  </div>
+</section>
+<section id="s-video" class="screen modal">
+  <div class="box">
+    <h2>🎬 Vídeo listo</h2>
+    <p class="ask" id="video-info"></p>
+    <button class="btn c1 hidden" id="video-share">📤 Compartir vídeo</button>
+    <button class="btn c3" id="video-save">⬇️ Guardar vídeo</button>
+    <button class="btn c5" id="video-close" data-padback>Cerrar</button>
+  </div>
+</section>
 <div id="toast"></div>
 <div id="loading" class="hidden"><div class="spinner">🍌</div><p>Cargando…</p></div>
 <script type="module" src="js/main.js"></script>

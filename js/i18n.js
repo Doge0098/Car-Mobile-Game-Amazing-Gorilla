@@ -4,10 +4,11 @@ import { save } from './save.js';
 import { EN as EN_BASE, EN_PATTERNS as PATTERNS_BASE, EN_WORDS } from './lang_en.js';
 import { EN_CUSTOM, EN_CUSTOM_PATTERNS } from './lang_en_custom.js';
 import { EN_CUP4 } from './lang_en_cup4.js';
+import { EN_SHARE, EN_SHARE_PATTERNS } from './lang_en_share.js';
 
 // Las tablas de cada bloque del juego se unen en una sola
-const EN = Object.assign({}, EN_BASE, EN_CUSTOM, EN_CUP4);
-const EN_PATTERNS = [...PATTERNS_BASE, ...EN_CUSTOM_PATTERNS];
+const EN = Object.assign({}, EN_BASE, EN_CUSTOM, EN_CUP4, EN_SHARE);
+const EN_PATTERNS = [...PATTERNS_BASE, ...EN_CUSTOM_PATTERNS, ...EN_SHARE_PATTERNS];
 
 export function lang() {
   const l = save.settings.lang;
