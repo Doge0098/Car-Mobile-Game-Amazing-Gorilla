@@ -88,7 +88,7 @@ void main(){
 }`;
 
 // cielo: degradado, sol con halo y nubes pintadas con sombreado por bandas
-const SKY_FS = `uniform vec3 top; uniform vec3 bottom; uniform float dim; uniform float uTime; uniform vec3 uSun; uniform vec3 uSunCol;
+export const SKY_FS = `uniform vec3 top; uniform vec3 bottom; uniform float dim; uniform float uTime; uniform vec3 uSun; uniform vec3 uSunCol;
 uniform vec3 uCloud; uniform vec3 uCloudShade; uniform float uCloudAmt; varying vec3 vP;
 float hash1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
