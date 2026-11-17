@@ -45,22 +45,25 @@ KARTS THAT TRANSFORM
 Your kart does not stay on the tarmac: depending on the stretch of track it turns into a boat, a hang glider or a submarine. Sail through the currents, glide from ring to ring above the clouds and dive along the seabed.
 
 TRACKS AND CUPS
-• Tracks grouped in cups: jungle, beach, volcano, ice, neon city, clouds, open sea, seabed…
+• Tracks grouped in cups: jungle, beach, volcano, ice, neon city, clouds, open sea, seabed, desert, a toy factory and a low-gravity space station.
 • Each cup unlocks when you win a trophy in the one before.
 • Shortcuts, jump ramps, boost pads and moving hazards on every track.
 • Weather that changes the race: showers, blizzards, meteors.
-• Every track can also be raced mirrored and in reverse.
+• Every track can also be raced mirrored and in reverse, by day, at dusk or at night.
+• Surprise track: a new randomly generated layout every time.
 
 GAME MODES
 • Quick race: pick a track and go.
 • Cups: several races in a row, with a podium and trophies.
-• Time trial: beat your best time racing against your own ghost.
+• Time trial: beat your best time against your own ghost and earn bronze, silver and gold medals.
 • Elimination: every few seconds, whoever is last is out.
-• Balloon battle: pop the other racers' balloons and protect your own.
+• Stunts: the most points from tricks and drifts wins.
+• Balloon battle and Banana fever in three arenas.
+• Duels against giant bosses and a different challenge every day.
 
 ARCADE DRIVING
 • Drifts with mini-turbos: the longer you hold the drift, the bigger the boost.
-• Turbo starts and mid-air tricks.
+• Turbo starts, mid-air tricks and slipstreaming to overtake.
 • Power-ups to attack and defend: turbos, coconuts, banana peels, shields, lightning, barrels and more.
 • Computer-controlled rivals with several difficulty levels.
 • A personal rival who challenges you in every race and adapts to your level.
@@ -68,17 +71,19 @@ ARCADE DRIVING
 YOUR GARAGE
 • Unlock gorillas and karts with the bananas you earn by racing.
 • Upgrade the engine, the tyres and the turbo.
-• Customise your kart with paint, hats, wheels, trails and horns.
+• Customise your kart with paint, hats, wheels, trails, horns and stickers, and pick your victory dance.
 
 ALWAYS SOMETHING TO DO
 • Missions in every race and awards to collect.
 • A guided tutorial that teaches you to drive and to drift.
 • Race replays with cinematic cameras, and a photo mode.
+• Challenge your friends: send them a link with your time and they race against your ghost.
 
 MADE FOR YOUR PHONE
 • Played with the phone held sideways (landscape).
 • The kart accelerates by itself: you steer, drift and use items.
 • Controls your way: button size and opacity, left-handed layout or tilt steering.
+• You can also play with a gamepad.
 • Graphics quality adjusts to your phone automatically.
 • In English and Spanish.
 
@@ -92,7 +97,7 @@ NO SMALL PRINT
 Three, two, one… go!
 ```
 
-2501 of 4000 characters.
+2975 of 4000 characters.
 
 ## Release notes
 
@@ -102,12 +107,12 @@ This is the “Release notes” text you write when you create each release in P
 First release of Amazing Gorilla Racing:
 • 3D kart racing with gorillas.
 • Karts that turn into a boat, a hang glider and a submarine.
-• Quick race, cups, time trial, elimination and balloon battle.
+• Quick race, cups, time trial, elimination, stunts, balloon battle and bosses.
 • A garage with gorillas, karts, upgrades and accessories.
 • In English and Spanish, with no ads, and playable offline.
 ```
 
-318 of 500 characters.
+334 of 500 characters.
 
 For later releases, say in two or three lines what really changes for the player (“New tracks”, “Fixed a
 problem when…”). In Play Console it goes inside the language tags, for example between `<en-US>` and

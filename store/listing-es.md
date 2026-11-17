@@ -45,22 +45,25 @@ KARTS QUE SE TRANSFORMAN
 Tu kart no se queda en el asfalto: según el tramo se convierte en barco, en ala delta o en submarino. Navega entre corrientes, planea de aro en aro por encima de las nubes y bucea por el fondo del mar.
 
 CIRCUITOS Y COPAS
-• Circuitos agrupados en copas: selva, playa, volcán, hielo, ciudad de neón, nubes, mar abierto, fondo marino…
+• Circuitos agrupados en copas: selva, playa, volcán, hielo, ciudad de neón, nubes, mar abierto, fondo marino, desierto, fábrica de juguetes y una estación espacial con poca gravedad.
 • Cada copa se desbloquea ganando un trofeo en la anterior.
 • Atajos, rampas de salto, aceleradores y obstáculos vivos en cada circuito.
 • Clima que cambia la carrera: chubascos, ventiscas, meteoritos.
-• Todos los circuitos se pueden correr también en espejo y en sentido inverso.
+• Todos los circuitos se pueden correr también en espejo y en sentido inverso, de día, al atardecer o de noche.
+• Circuito sorpresa: un trazado nuevo generado al azar cada vez.
 
 MODOS DE JUEGO
 • Carrera rápida: elige circuito y a correr.
 • Copas: varias carreras seguidas, con podio y trofeos.
-• Contrarreloj: bate tu mejor tiempo corriendo contra tu propio fantasma.
+• Contrarreloj: bate tu mejor tiempo contra tu propio fantasma y gana medallas de bronce, plata y oro.
 • Eliminación: cada pocos segundos, el último queda fuera.
-• Batalla de globos: revienta los globos de los demás y protege los tuyos.
+• Acrobacias: gana quien sume más puntos con trucos y derrapes.
+• Batalla de globos y Fiebre del plátano en tres arenas.
+• Duelos contra jefes gigantes y un reto distinto cada día.
 
 CONDUCCIÓN ARCADE
 • Derrapes con mini-turbo: cuanto más aguantas el derrape, más impulso.
-• Salida turbo y trucos en el aire.
+• Salida turbo, trucos en el aire y rebufo para adelantar.
 • Power-ups para atacar y defenderte: turbos, cocos, cáscaras de plátano, escudos, rayos, barriles y más.
 • Rivales controlados por el juego, con varios niveles de dificultad.
 • Un rival personal que te reta en cada carrera y se adapta a tu nivel.
@@ -68,17 +71,19 @@ CONDUCCIÓN ARCADE
 TU GARAJE
 • Desbloquea gorilas y karts con los plátanos que ganas corriendo.
 • Mejora el motor, los neumáticos y el turbo.
-• Personaliza tu kart con pintura, sombreros, ruedas, estelas y bocinas.
+• Personaliza tu kart con pintura, sombreros, ruedas, estelas, bocinas y pegatinas, y elige tu baile de victoria.
 
 SIEMPRE HAY ALGO QUE HACER
 • Misiones en cada carrera y logros por conseguir.
 • Tutorial guiado para aprender a conducir y a derrapar.
 • Repetición de la carrera con cámaras de cine y modo foto.
+• Reta a tus amigos: envíales un enlace con tu tiempo y correrán contra tu fantasma.
 
 HECHO PARA EL MÓVIL
 • Se juega con el móvil en horizontal.
 • El kart acelera solo: tú giras, derrapas y usas los objetos.
 • Controles a tu gusto: tamaño y opacidad de los botones, modo para zurdos o dirección inclinando el móvil.
+• También se puede jugar con mando.
 • La calidad gráfica se ajusta sola a tu móvil.
 • En español y en inglés.
 
@@ -92,7 +97,7 @@ SIN LETRA PEQUEÑA
 Tres, dos, uno… ¡a correr!
 ```
 
-2589 de 4000 caracteres.
+3080 de 4000 caracteres.
 
 ## Novedades de la versión
 
@@ -102,12 +107,12 @@ Es el texto «Notas de la versión» que se escribe al crear cada versión en Pl
 Primera versión de Amazing Gorilla Racing:
 • Carreras de karts en 3D con gorilas.
 • Karts que se transforman en barco, ala delta y submarino.
-• Carrera rápida, copas, contrarreloj, eliminación y batalla de globos.
+• Carrera rápida, copas, contrarreloj, eliminación, acrobacias, batalla de globos y jefes.
 • Garaje con gorilas, karts, mejoras y accesorios.
 • En español e inglés, sin anuncios y sin conexión.
 ```
 
-316 de 500 caracteres.
+335 de 500 caracteres.
 
 En las siguientes versiones, cuenta en dos o tres líneas lo que cambia de verdad para quien juega
 («Circuitos nuevos», «Corregido un fallo al…»). En Play Console se pega dentro de las etiquetas del idioma,
