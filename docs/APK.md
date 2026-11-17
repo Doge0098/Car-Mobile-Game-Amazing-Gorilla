@@ -3,6 +3,8 @@
 Además de la versión web, GitHub fabrica solo una **app de Android (APK)** del juego.
 Todo lo de esta guía se puede hacer desde el móvil, con el navegador.
 
+Este APK es para probar el juego. Para publicarlo en Google Play, la guía es [PLAY_STORE.md](PLAY_STORE.md).
+
 En los enlaces, cambia `<usuario>` y `<repositorio>` por los de este repositorio.
 
 ## Dónde está el APK
@@ -39,7 +41,7 @@ Con Chrome en el móvil Android:
    toca **Más detalles** → **Instalar de todos modos**.
    Si ofrece **analizar la aplicación**, acepta y, cuando acabe, toca **Instalar**.
 7. Toca **Abrir**. El juego queda en el cajón de aplicaciones como **Amazing Gorilla Racing**
-   y funciona sin conexión.
+   y funciona sin conexión. Se juega siempre con el móvil en horizontal y a pantalla completa.
 
 Si en el paso 4 no aparece el botón de Ajustes, el permiso está en
 **Ajustes → Aplicaciones → Acceso especial → Instalar aplicaciones desconocidas → Chrome**.
@@ -102,11 +104,14 @@ Este APK lleva **firma de depuración**: sirve para instalar y probar el juego, 
   instalar encima: Android dirá **«No se ha instalado la aplicación»**.
 - **El número de versión tiene que subir.** Sube solo con cada compilación. Si algún día
   se borra o se renombra el archivo del workflow, la cuenta vuelve a empezar y Android
-  rechazará el APK nuevo por ser «más antiguo».
+  rechazará el APK nuevo por ser «más antiguo» (se evita con la variable
+  `ANDROID_VERSION_CODE_OFFSET`, explicada en [PLAY_STORE.md](PLAY_STORE.md#si-algo-falla)).
 - En los dos casos la solución es **desinstalar el juego e instalar el APK nuevo**.
   Al desinstalar se pierde la partida guardada en la app.
-- **No vale para Google Play tal cual.** Play exige una firma privada de publicación y
-  otro formato de archivo (AAB), entre otros requisitos.
+- **No vale para Google Play.** Play exige una firma privada de publicación y otro formato
+  de archivo (AAB). Esa otra versión la fabrica la misma compilación cuando el repositorio
+  tiene las claves del dueño, y no se publica aquí: [PLAY_STORE.md](PLAY_STORE.md).
+  La versión de Google Play y este APK tampoco se pueden instalar una encima de la otra.
 - La clave de depuración está a la vista en el repositorio, como es habitual con estas
   claves: no protege nada. Por eso, **instala solo el APK descargado de este repositorio**
   y no uno que te llegue por otro lado con el mismo nombre.
@@ -116,7 +121,12 @@ Este APK lleva **firma de depuración**: sirve para instalar y probar el juego, 
 Verás una ❌ roja en la pestaña **Actions**. El APK anterior sigue disponible en el enlace
 de siempre; no se rompe nada.
 
-1. Abre **Actions** → toca la compilación con la ❌ → toca **Compilar APK**.
+Cada compilación tiene dos trabajos: **Compilar APK** (este APK de pruebas) y **Compilar
+versión para Google Play**. Son independientes: si solo falla el segundo, el APK nuevo se
+ha publicado igualmente, y lo que hay que mirar está en
+[PLAY_STORE.md](PLAY_STORE.md#si-algo-falla).
+
+1. Abre **Actions** → toca la compilación con la ❌ → toca el trabajo que tenga la ❌.
 2. Mira qué paso tiene la ❌ y ábrelo: el error está en las últimas líneas.
 3. Primero prueba otra vez: arriba a la derecha, **Re-run jobs** → **Re-run failed jobs**.
    Muchos fallos son de red y a la segunda pasan.
@@ -130,9 +140,10 @@ Qué suele significar cada paso en rojo:
 | Preparar Node.js / Preparar Java / Recuperar la caché | Fallo pasajero de GitHub. Reintenta. |
 | Comprobar el SDK de Android | La máquina de GitHub no trae el SDK de Android. Hay que revisar el workflow. |
 | Instalar dependencias | `package.json` y `package-lock.json` no coinciden. Hay que regenerar el segundo con `npm install`. |
-| Montar la web (www/) | Falta `index.html`, `sw.js`, `manifest.webmanifest`, `css/`, `js/` o `icons/`. |
+| Montar la web (www/) | Falta `index.html`, `privacy.html`, `sw.js`, `manifest.webmanifest`, `css/`, `js/` o `icons/`. |
 | Crear / Adaptar / Sincronizar el proyecto Android | Cambió algo de Capacitor o de `capacitor.config.json`. El mensaje dice el archivo. |
-| Compilar el APK | Error de Gradle. Si no es de red (reintenta), hace falta enviar el registro. |
+| Comprobar la clave de firma (solo en el trabajo de Google Play) | Algún secreto `ANDROID_*` falta o está mal copiado. El mensaje dice cuál. |
+| Compilar el APK / Compilar el AAB y el APK de publicación | Error de Gradle. Si no es de red (reintenta), hace falta enviar el registro. |
 | Publicar en la release apk-latest | GitHub no dejó crear o cambiar la release: permisos de Actions recortados en la cuenta u organización, o reglas que protegen etiquetas o releases. |
 
 Si lo único que falla es el último paso, el APK de esa compilación está igualmente en la
@@ -148,11 +159,12 @@ El juego sigue siendo una web sin compilación. El empaquetado vive en estos arc
 
 | Archivo | Para qué |
 | --- | --- |
-| `.github/workflows/android-apk.yml` | La compilación en GitHub Actions. |
+| `.github/workflows/android-apk.yml` | La compilación en GitHub Actions: trabajo `apk` (este APK) y trabajo `play` (versión para Google Play). |
 | `package.json`, `package-lock.json` | Versiones fijas de Capacitor 8 (pide Node 22 o superior y Java 21). |
 | `capacitor.config.json` | Identificador (`com.amazinggorilla.racing`), nombre, color de fondo y barras ocultas. |
-| `scripts/build-www.mjs` | Copia `index.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/` e `icons/` a `www/`. |
-| `scripts/patch-android.mjs` | Ajusta el proyecto Android generado: horizontal, pantalla completa, pantalla encendida, iconos, arranque oscuro, vibración, versión y firma. |
+| `scripts/build-www.mjs` | Copia `index.html`, `privacy.html`, `manifest.webmanifest`, `sw.js`, `css/`, `js/` e `icons/` a `www/`. |
+| `scripts/patch-android.mjs` | Ajusta el proyecto Android generado: horizontal fijo (`sensorLandscape`), pantalla completa, pantalla encendida, iconos, arranque oscuro, vibración, versión y firma. Al final comprueba que todo ha quedado escrito y, si no, para la compilación. |
+| `scripts/release-signing.mjs` | Solo para el trabajo `play`: comprueba la clave de firma del dueño y la firma del AAB y del APK de publicación ([PLAY_STORE.md](PLAY_STORE.md#para-quien-toque-el-código)). |
 | `scripts/png-lite.mjs` | Lector y escalador de PNG sin dependencias, para los iconos. |
 | `scripts/signing/debug.keystore` | Clave de depuración fija (contraseña `android`, alias `androiddebugkey`). |
 

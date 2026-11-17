@@ -71,6 +71,11 @@ python3 -m http.server 8080
 Tras abrirlo una vez con conexión, el juego queda guardado y se puede jugar offline.
 
 El APK de Android se compila solo en GitHub Actions cada vez que cambia el juego; los detalles están en [docs/APK.md](docs/APK.md).
+Instalado (como app de Android o desde el navegador), el juego se abre siempre en horizontal y a pantalla completa.
+
+Para publicarlo en **Google Play**, la guía paso a paso es [docs/PLAY_STORE.md](docs/PLAY_STORE.md): la misma compilación fabrica la versión
+firmada (AAB) cuando el repositorio tiene las claves del dueño. Los textos y gráficos de la ficha están en [`store/`](store/) y la
+política de privacidad, en [`privacy.html`](privacy.html).
 
 ## Estructura
 
