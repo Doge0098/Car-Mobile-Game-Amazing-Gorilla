@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Gráfico de funciones de Google Play (1024 × 500)</title>
+<!-- Fuente del gráfico de funciones de la ficha de Google Play. render.mjs le hace la foto al <canvas>. -->
+<style>
+  html, body { margin: 0; background: #1a0b3a; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="art" width="1024" height="500"></canvas>
+<script src="art.js"></script>
+<script>
+  document.fonts.ready.then(() => {
+    paintFeatureGraphic(document.getElementById('art'));
+    document.body.dataset.ready = '1';
+  });
+</script>
+</body>
+</html>
