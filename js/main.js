@@ -13,7 +13,7 @@ import { Post } from './post.js';
 import { Podium } from './podium.js';
 import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
 import { Tutorial, TUTORIAL } from './tutorial.js';
-import { MISSIONS, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
+import { MISSIONS, MISSION_COUNT, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
 const $ = id => document.getElementById(id);
@@ -205,8 +205,9 @@ const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
 // Parrilla de rivales al azar: [{ char, kart, color }] (en una copa se mantiene durante sus carreras)
 function makeLineup(n) {
   const mix = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const chars = mix(CHARACTERS.filter(c => c.id !== save.char)), karts = mix(KARTS.slice()), c0 = Math.floor(Math.random() * 8);
-  return Array.from({ length: n }, (_, i) => ({ char: chars[i % chars.length].id, kart: karts[i % karts.length].id, color: 1 + (c0 + i * 3) % (KART_COLORS.length - 1) }));
+  const chars = mix(CHARACTERS.filter(c => c.id !== save.char)), karts = mix(KARTS.slice());
+  // cada modelo de coche rival lleva siempre el mismo color: así las geometrías en caché no crecen sin límite
+  return Array.from({ length: n }, (_, i) => { const k = karts[i % karts.length]; return { char: chars[i % chars.length].id, kart: k.id, color: 1 + (KARTS.indexOf(k) * 3) % (KART_COLORS.length - 1) }; });
 }
 
 function disposeRace() {
@@ -696,7 +697,7 @@ function buildMeta() {
         `<div class="bar"><i style="width:${Math.round(v / goal * 100)}%"></i></div></div><div class="ach-side"><b>${done ? '✔' : v + '/' + goal}</b><small>🍌 ${a.reward}</small></div></div>`;
     }).join('');
   } else if (mTab === 'missions') {
-    box.innerHTML = '<p class="meta-note">En cada carrera recibes 3 misiones al azar (2 en contrarreloj). Cúmplelas para ganar plátanos extra al terminar.</p>' +
+    box.innerHTML = `<p class="meta-note">${fill('En cada carrera recibes {n} misiones al azar ({t} en contrarreloj). Cúmplelas para ganar plátanos extra al terminar.', { n: MISSION_COUNT.default, t: MISSION_COUNT.time })}</p>` +
       MISSIONS.map(x => `<div class="ach"><span class="ach-ico">📋</span><div class="ach-txt"><h3>${fill(x.text, { n: x.n, par: 'un tiempo objetivo' })}</h3></div><div class="ach-side"><small>🍌 ${x.reward}</small></div></div>`).join('');
   } else {
     box.innerHTML = LIFETIME.map(d => `<div class="lstat"><span>${d.name}</span><b>${statText(save, d)}</b></div>`).join('');

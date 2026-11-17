@@ -158,12 +158,20 @@ const HAT_BUILD = {
 };
 const HAT_KEEPS_TUFTS = { flor: 1 }; // sombreros que dejan ver los mechones de la coronilla
 
+// Geometrías del gorila en caché, por piezas: el tronco depende de la postura, la cabeza del sombrero
+// (su clave lo incluye) y los brazos solo del personaje. Así un sombrero nuevo solo crea una cabeza.
 const gorillaCache = new Map();
+const gorillaPart = (key, make) => { let g = gorillaCache.get(key); if (!g) gorillaCache.set(key, g = make()); return g; };
 function gorillaGeos(ch, standing, hat) {
   const hatFn = (hat && HAT_BUILD[hat]) || null;
-  const key = ch.id + (standing ? '_s' : '') + (hatFn ? '_' + hat : '');
-  if (gorillaCache.has(key)) return gorillaCache.get(key);
-  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72), skinD = shade(skin, 0.7);
+  return {
+    torso: gorillaPart(ch.id + (standing ? '_torso_s' : '_torso'), () => gorillaTorso(ch, standing)),
+    head: gorillaPart(ch.id + '_head' + (hatFn ? '_' + hat : ''), () => gorillaHead(ch, hat, hatFn)),
+    armP: gorillaPart(ch.id + '_armP', () => gorillaArm(ch, 1)), armN: gorillaPart(ch.id + '_armN', () => gorillaArm(ch, -1)),
+  };
+}
+function gorillaTorso(ch, standing) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72);
   // --- tronco y piernas ---
   const t = [
     [sphere(0.62), fur, [0, 0.75, 0], [1.15, 1.1, 0.95]],
@@ -183,6 +191,10 @@ function gorillaGeos(ch, standing, hat) {
       for (let i = -1; i <= 1; i++) t.push([sphere(0.075, 8), skin, [0.32 * s + i * 0.11, 0.24, 1.1]]);
     }
   }
+  return bake(t);
+}
+function gorillaHead(ch, hat, hatFn) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72), skinD = shade(skin, 0.7);
   // --- cabeza ---
   const h = [
     [sphere(0.46), fur, null, [1, 1.05, 1]], [sphere(0.3), fur, [0, 0.3, -0.06], [0.9, 0.95, 1.05]],
@@ -199,15 +211,15 @@ function gorillaGeos(ch, standing, hat) {
   // accesorio del personaje o, si lleva uno, el sombrero de la tienda
   if (hatFn) hatFn(h, acc);
   if (ACC_BUILD[ch.acc] && (!hatFn || FACE_ACC[ch.acc])) ACC_BUILD[ch.acc](h, acc);
-  // --- brazos con mano, dedos, pulgar y muñequera ---
-  const arm = s => {
-    const a = [[capsule(0.18, 0.62), fur, [0, -0.45, 0]], [sphere(0.24, 10), furD, [0, -0.1, 0], [1, 0.8, 1]], [sphere(0.2, 8), skin, [0, -0.93, 0]],
-      [torus(0.19, 0.05), acc, [0, -0.74, 0], null, [HPI, 0, 0]], [capsule(0.055, 0.09), skin, [0.19 * s, -0.98, 0.08], null, [0.2, 0, 0.9 * s]]];
-    for (let i = -1; i <= 1; i++) a.push([capsule(0.055, 0.1), skin, [i * 0.1, -1.1, 0.05], null, [0.25, 0, i * -0.18]]);
-    return bake(a);
-  };
-  const G = { torso: bake(t), head: bake(h), armP: arm(1), armN: arm(-1) };
-  gorillaCache.set(key, G); return G;
+  return bake(h);
+}
+// --- brazo con mano, dedos, pulgar y muñequera ---
+function gorillaArm(ch, s) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72);
+  const a = [[capsule(0.18, 0.62), fur, [0, -0.45, 0]], [sphere(0.24, 10), furD, [0, -0.1, 0], [1, 0.8, 1]], [sphere(0.2, 8), skin, [0, -0.93, 0]],
+    [torus(0.19, 0.05), acc, [0, -0.74, 0], null, [HPI, 0, 0]], [capsule(0.055, 0.09), skin, [0.19 * s, -0.98, 0.08], null, [0.2, 0, 0.9 * s]]];
+  for (let i = -1; i <= 1; i++) a.push([capsule(0.055, 0.1), skin, [i * 0.1, -1.1, 0.05], null, [0.25, 0, i * -0.18]]);
+  return bake(a);
 }
 let faceG = null;
 function faceGeos() {
