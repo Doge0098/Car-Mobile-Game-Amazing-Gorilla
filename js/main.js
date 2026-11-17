@@ -1,6 +1,6 @@
 // Amazing Gorilla Racing — arranque, menús, HUD y bucle principal.
 import * as THREE from './vendor/three.module.min.js';
-import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, LAPS, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
+import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
 import { save, loadSave, persist, resetSave } from './save.js';
 import * as A from './audio.js';
 import { initInput, input, pollInput, consumePresses, enableTilt } from './input.js';
@@ -161,7 +161,7 @@ function startRace(trackId) {
     hint('');
     buildMinimap();
     $('hud-total').textContent = mode === 'time' ? '' : '/' + race.racers.length;
-    $('hud-laps').textContent = LAPS;
+    $('hud-laps').textContent = race.laps;
     $('hud-pos').parentElement.style.visibility = mode === 'time' ? 'hidden' : 'visible';
     $('hud').classList.toggle('tilt', save.settings.controls === 'tilt');
     $('hud-wrong').classList.add('hidden');
@@ -242,7 +242,7 @@ function updateHud(dt) {
     if (lastHud.pos !== undefined) { const e = $('hud-pos').parentElement; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
     lastHud.pos = p.pos; $('hud-pos').textContent = p.pos;
   }
-  setText('hud-lap', Math.max(1, Math.min(LAPS, Math.floor(p.prog / track.N) + 1)));
+  setText('hud-lap', Math.max(1, Math.min(race.laps, Math.floor(p.prog / track.N) + 1)));
   setText('hud-time', fmt(race.time));
   setText('hud-bananas', p.bananas);
   let icon = '', has = false;

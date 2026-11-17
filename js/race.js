@@ -221,7 +221,7 @@ class Racer {
       this.rolling -= dt;
       if (this.rolling <= 0) { this.item = race.rollItem(this); this.itemCount = 1; this.useDelay = 1 + Math.random() * 3.5; if (this.isPlayer) sfx.item(); }
     }
-    if (!this.finished && this.prog >= LAPS * N && (race.state === 'racing' || race.state === 'finished')) race.finishRacer(this);
+    if (!this.finished && this.prog >= race.laps * N && (race.state === 'racing' || race.state === 'finished')) race.finishRacer(this);
   }
 
   driftLevel() { return this.charge > 2.6 ? 3 : this.charge > 1.6 ? 2 : this.charge > 0.75 ? 1 : 0; }
@@ -384,7 +384,8 @@ class Racer {
 
 export class Race {
   constructor(opts) {
-    Object.assign(this, opts); // scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent...
+    Object.assign(this, opts); // scene, track, fx:{add,norm}, mode, difficulty, laps, quality, bloom, shadows, onEvent...
+    this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
     this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = []; this.shocks = [];
@@ -620,7 +621,7 @@ export class Race {
     const order = this.ranking(), extra = this.state === 'finished' ? this.stateT : 0;
     return order.map((r, i) => ({
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
-      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (LAPS * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas,
+      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas,
     }));
   }
 
@@ -666,8 +667,8 @@ export class Race {
     this.prevDrift = input.drift;
     if (this.state === 'racing') {
       const lapNow = Math.floor(p.prog / N);
-      if (lapNow > lapBefore && lapNow > (p.maxLap || 0) && lapNow < LAPS) {
-        p.maxLap = lapNow; this.emit(lapNow === LAPS - 1 ? 'finalLap' : 'lap', lapNow + 1);
+      if (lapNow > lapBefore && lapNow > (p.maxLap || 0) && lapNow < this.laps) {
+        p.maxLap = lapNow; this.emit(lapNow === this.laps - 1 ? 'finalLap' : 'lap', lapNow + 1);
       }
     }
 
