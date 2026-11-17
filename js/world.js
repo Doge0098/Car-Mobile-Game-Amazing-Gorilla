@@ -1,7 +1,8 @@
 // Sistemas dinámicos del mundo: marcas de derrape, estelas, clima y obstáculos vivos.
 import * as THREE from './vendor/three.module.min.js';
 import * as A from './audio.js';
-import { makeHazard, glowTex } from './models.js';
+import { makeHazard, glowTex, merged } from './models.js';
+import { addOutline } from './outline.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrap = (v, b) => ((v % b) + b) % b;
@@ -141,6 +142,22 @@ export class Weather {
       this.obj = new THREE.LineSegments(g, this.mat); this.obj.frustumCulled = false; scene.add(this.obj); this.objs.push(this.obj);
       this.stars = []; for (let i = 0; i < n; i++) this.stars.push({ t: 9, life: 1, d: new THREE.Vector3(), v: new THREE.Vector3() });
       this.spawnT = 1;
+    } else if (kind === 'sandstorm' || kind === 'confetti') {
+      // arena que cruza con el viento / papelillos de colores que caen (puntos alrededor de la cámara)
+      const sand = kind === 'sandstorm', n = this.n = sand ? (lowQ ? 320 : 760) : (lowQ ? 110 : 240);
+      this.off = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { this.off[i * 3] = Math.random() * 70; this.off[i * 3 + 1] = Math.random() * 30; this.off[i * 3 + 2] = Math.random() * 70; }
+      this.pos = new Float32Array(n * 3);
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+      if (sand) this.mat = new THREE.PointsMaterial({ color: 0xf6d9a0, size: 1.1, map: glowTex(), transparent: true, opacity: 0, depthWrite: false, fog: false });
+      else {
+        const col = new Float32Array(n * 3), c = new THREE.Color(), pal = [0xff4fd8, 0xffd21f, 0x22e6ff, 0x35e08a, 0xff7a1a, 0x7a5cff, 0xff3b4a];
+        for (let i = 0; i < n; i++) { c.set(pal[i % pal.length]); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        this.mat = new THREE.PointsMaterial({ vertexColors: true, size: 0.34, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
+      }
+      this.obj = new THREE.Points(g, this.mat); this.obj.frustumCulled = false; this.obj.renderOrder = 6; this.obj.visible = false;
+      scene.add(this.obj); this.objs.push(this.obj);
     }
   }
 
@@ -233,6 +250,30 @@ export class Weather {
         P[i * 6 + 3] = cam.x + (hx - s.v.x * tl) * R; P[i * 6 + 4] = cam.y + (hy - s.v.y * tl) * R; P[i * 6 + 5] = cam.z + (hz - s.v.z * tl) * R;
       }
       this.obj.geometry.attributes.position.needsUpdate = true;
+    } else if (k === 'sandstorm') {
+      // ráfagas: la arena cruza la pista, la niebla se cierra y la luz se vuelve ocre
+      const lv = this.level = clamp(Math.sin(t * 0.085 - 1.1) * 1.6 - 0.1, 0, 1);
+      this.obj.visible = lv > 0.02 && !inTunnel; this.mat.opacity = lv * 0.75;
+      if (this.obj.visible) {
+        const P = this.pos, O = this.off;
+        for (let i = 0; i < this.n; i++) {
+          P[i * 3] = cam.x + wrap(O[i * 3] + t * 38 - cam.x, 70) - 35; P[i * 3 + 1] = cam.y - 8 + wrap(O[i * 3 + 1] + Math.sin(t * 1.7 + i) * 1.2 - t * 1.5, 30);
+          P[i * 3 + 2] = cam.z + wrap(O[i * 3 + 2] + t * 15 - cam.z, 70) - 35;
+        }
+        this.obj.geometry.attributes.position.needsUpdate = true;
+        if (lv > 0.3 && Math.random() < 0.6) this.fx.norm.emit(cam.x + (Math.random() - 0.5) * 60, p.y + 0.4, cam.z + (Math.random() - 0.5) * 60, 16, 1 + Math.random() * 2, 6, 0xf2c46a, 16, 0.9, 0, 1.6);
+      }
+      tr.setLight(lv * 0.3); tr.fog.near = tr.baseFog[0] * (1 - 0.65 * lv); tr.fog.far = tr.baseFog[1] * (1 - 0.52 * lv);
+    } else if (k === 'confetti') {
+      this.obj.visible = !inTunnel;
+      if (this.obj.visible) {
+        const P = this.pos, O = this.off;
+        for (let i = 0; i < this.n; i++) {
+          P[i * 3] = cam.x + wrap(O[i * 3] + Math.sin(t * 1.3 + i) * 1.6 - cam.x, 70) - 35; P[i * 3 + 1] = cam.y - 8 + wrap(O[i * 3 + 1] - t * (2.2 + (i % 5) * 0.4), 30);
+          P[i * 3 + 2] = cam.z + wrap(O[i * 3 + 2] + Math.cos(t * 1.1 + i * 2) * 1.6 - cam.z, 70) - 35;
+        }
+        this.obj.geometry.attributes.position.needsUpdate = true;
+      }
     }
   }
 
@@ -244,6 +285,36 @@ export class Weather {
 }
 
 // ---------------- Obstáculos vivos ----------------
+// Obstáculos de la Copa Galaxia: matojo rodante, robot de cuerda y asteroide flotante
+const ico = (r, d = 0) => new THREE.IcosahedronGeometry(r, d), box = (x, y, z) => new THREE.BoxGeometry(x, y, z), cyl = (a, b, h, n = 8) => new THREE.CylinderGeometry(a, b, h, n);
+const XHAZ = {
+  tumbleweed: () => {
+    const p = [[ico(0.5, 0), 0x8a6a34, [0, 0, 0]]];
+    for (let i = 0; i < 5; i++) p.push([new THREE.TorusGeometry(1, 0.075, 4, 10), i % 2 ? 0xc8a45a : 0xa8843a, null, null, [i * 1.3, i * 0.9, i * 0.5]]);
+    for (let i = 0; i < 8; i++) { const a = i * 0.8, b = i * 1.7; p.push([cyl(0.04, 0.04, 1.3, 4), 0xb8944a, [Math.cos(a) * 0.6, Math.sin(b) * 0.6, Math.sin(a) * 0.6], null, [b, a, a + b]]); }
+    return merged(p);
+  },
+  windup: () => merged([
+    [box(1.5, 1.4, 1.2), 0xff3b4a, [0, 1.25, 0]], [box(1.2, 0.95, 1.05), 0xfff3d0, [0, 2.45, 0]], [box(0.5, 0.55, 0.9), 0x2b6cff, [-0.42, 0.28, 0.08]], [box(0.5, 0.55, 0.9), 0x2b6cff, [0.42, 0.28, 0.08]],
+    [ico(0.19, 1), 0x22e6ff, [-0.3, 2.55, 0.55]], [ico(0.19, 1), 0x22e6ff, [0.3, 2.55, 0.55]], [box(0.7, 0.1, 0.1), 0x2a2238, [0, 2.2, 0.55]], [box(0.9, 0.6, 0.1), 0xffd21f, [0, 1.3, 0.62]],
+    [cyl(0.16, 0.16, 0.9, 6), 0x8a8a9a, [-0.95, 1.4, 0.15], null, [0.5, 0, 0]], [cyl(0.16, 0.16, 0.9, 6), 0x8a8a9a, [0.95, 1.4, 0.15], null, [0.5, 0, 0]],
+    [cyl(0.05, 0.05, 0.5, 5), 0x8a8a9a, [0, 3.15, 0]], [ico(0.15, 0), 0xff7a1a, [0, 3.45, 0]],
+    [cyl(0.08, 0.08, 0.6, 5), 0x8a8a9a, [0, 1.35, -0.9], null, [Math.PI / 2, 0, 0]], [new THREE.TorusGeometry(0.3, 0.09, 5, 10), 0xffd21f, [-0.3, 1.35, -1.25]], [new THREE.TorusGeometry(0.3, 0.09, 5, 10), 0xffd21f, [0.3, 1.35, -1.25]],
+  ]),
+  asteroid: () => merged([
+    [new THREE.DodecahedronGeometry(1.25, 0), 0x8a8fb0, null, [1.15, 0.9, 1]], [new THREE.DodecahedronGeometry(0.6, 0), 0x6a6f92, [0.9, 0.5, 0.3]], [new THREE.DodecahedronGeometry(0.45, 0), 0xa8aed0, [-0.8, -0.5, 0.5]],
+    [new THREE.OctahedronGeometry(0.42, 0), 0x7ff0ff, [-0.4, 0.95, -0.2], [0.7, 1.5, 0.7]], [new THREE.OctahedronGeometry(0.3, 0), 0xff7ac8, [0.5, -0.8, -0.5], [0.7, 1.4, 0.7]],
+  ]),
+};
+const xGeo = new Map();
+let xMat = null;
+function makeXHazard(type) {
+  if (!xGeo.has(type)) xGeo.set(type, XHAZ[type]());
+  if (!xMat) xMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const m = new THREE.Mesh(xGeo.get(type), xMat); addOutline(m);
+  return m;
+}
+
 const CAND = [0.045, 0.125, 0.165, 0.235, 0.275, 0.33, 0.5, 0.585, 0.76, 0.84, 0.9, 0.965];
 
 export class Hazards {
@@ -257,7 +328,7 @@ export class Hazards {
       picks.push(f); if (picks.length >= 4) break;
     }
     for (const f of picks) {
-      const idx = Math.floor(f * N), s = track.samples[idx], holder = new THREE.Group(), mesh = makeHazard(type);
+      const idx = Math.floor(f * N), s = track.samples[idx], holder = new THREE.Group(), mesh = XHAZ[type] ? makeXHazard(type) : makeHazard(type);
       mesh.castShadow = !!shadows; holder.add(mesh);
       const h = { kind: type, idx, s, lat: (rand() - 0.5) * (track.hw - 2) * 1.6, x: s.x, y: s.y, z: s.z, ph: rand() * 6.28, down: 0, holder, mesh, harm: true, hopY: 0, was: 0 };
       if (type === 'geyser') {
@@ -302,6 +373,13 @@ export class Hazards {
         h.holder.rotation.y = moving ? Math.atan2(s.nx, s.nz) + (Math.cos(t * 0.7 + h.ph) > 0 ? 0 : Math.PI) : s.h + Math.PI;
       } else if (h.kind === 'drone') { h.lat = A0 * Math.sin(t * 0.8 + h.ph); along = Math.cos(t * 0.8 + h.ph) * 5; m.position.y = 0.3 + Math.sin(t * 3 + h.ph) * 0.25; m.rotation.y = t * 2; }
       else if (h.kind === 'star') { h.lat = A0 * Math.sin(t * 0.4 + h.ph); hop = Math.abs(Math.sin(t * 2.6 + h.ph)) * 2.8; m.position.y = hop; m.rotation.z = Math.sin(t * 2.6 + h.ph) * 0.4; h.holder.rotation.y = s.h + Math.PI; }
+      else if (h.kind === 'tumbleweed') { h.lat = A0 * Math.sin(t * 0.75 + h.ph); m.position.y = 1.05 + Math.abs(Math.sin(t * 4.5 + h.ph)) * 0.7; m.rotation.z = -h.lat / 1.05; m.rotation.x = t * 1.5; h.holder.rotation.y = s.h; }
+      else if (h.kind === 'windup') {
+        // robot de cuerda: cruza la pista a pasitos y se para a mirar
+        const v = Math.sin(t * 0.6 + h.ph), moving = Math.abs(v) < 0.7;
+        h.lat = A0 * clamp(v * 1.42, -1, 1); m.rotation.z = moving ? Math.sin(t * 14) * 0.13 : 0; m.position.y = moving ? Math.abs(Math.sin(t * 14)) * 0.12 : 0;
+        h.holder.rotation.y = moving ? Math.atan2(s.nx, s.nz) + (Math.cos(t * 0.6 + h.ph) > 0 ? 0 : Math.PI) : s.h + Math.PI;
+      } else if (h.kind === 'asteroid') { h.lat = A0 * Math.sin(t * 0.55 + h.ph); along = Math.cos(t * 0.55 + h.ph) * 4; m.position.y = 1.5 + Math.sin(t * 1.8 + h.ph) * 0.3; m.rotation.set(t * 0.9, t * 0.6, 0); }
       h.hopY = hop;
       h.x = s.x + s.nx * h.lat + s.tx * along; h.z = s.z + s.nz * h.lat + s.tz * along;
       h.holder.position.set(h.x, h.y, h.z);
@@ -311,7 +389,7 @@ export class Hazards {
       for (const r of race.racers) {
         if ((r.x - h.x) ** 2 + (r.z - h.z) ** 2 < 4.6 * r.sizeK && r.hopY < 1.5) {
           r.hit(); this.knock(h);
-          if (r.isPlayer || near) { if (h.kind === 'barrel') A.sfx.crash?.(); else A.sfx.critter?.(); }
+          if (r.isPlayer || near) { if (h.kind === 'barrel' || h.kind === 'asteroid') A.sfx.crash?.(); else if (h.kind === 'tumbleweed') A.sfx.thud?.(); else A.sfx.critter?.(); }
           break;
         }
       }

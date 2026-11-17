@@ -690,6 +690,78 @@ export const PROPS = {
     [C(0.95, 0.7, 0.6, 10), 0xffffff, [0, 7.6, 0]],
     [ico(0.7, 1), 0xffd700, [0, 8.6, 0]],
   ]) },
+  // --- Copa Galaxia: desierto ---
+  cactus: { scale: [0.8, 1.7], make: () => merged([
+    [C(0.42, 0.5, 4.6, 8), 0x3fae5a, [0, 2.3, 0]], [ico(0.44, 1), 0x4cc468, [0, 4.6, 0]],
+    [C(0.26, 0.26, 1.2, 6), 0x38a052, [0.85, 2.4, 0], null, [0, 0, PI / 2]], [C(0.26, 0.28, 1.7, 6), 0x3fae5a, [1.4, 3.2, 0]], [ico(0.27, 1), 0x4cc468, [1.4, 4.05, 0]],
+    [C(0.22, 0.22, 1.0, 6), 0x38a052, [-0.75, 1.6, 0], null, [0, 0, PI / 2]], [C(0.22, 0.24, 1.3, 6), 0x3fae5a, [-1.2, 2.2, 0]], [ico(0.23, 1), 0x4cc468, [-1.2, 2.85, 0]],
+    [ico(0.2, 0), 0xff5ec4, [0.15, 4.98, 0.1]],
+  ]) },
+  mesa: { scale: [1.2, 3.2], make: () => merged([ // roca de cañón por estratos
+    [C(2.2, 2.8, 2.2, 7), 0xc8703a, [0, 1.1, 0]], [C(1.9, 2.2, 1.6, 7), 0xe08a4a, [0.1, 3.0, 0]], [C(2.1, 1.9, 0.5, 7), 0xf0c080, [0.1, 4.05, 0]],
+    [C(1.5, 1.9, 1.8, 7), 0xc8703a, [0.2, 5.2, 0.1]], [C(1.7, 1.5, 0.5, 7), 0xa85a30, [0.2, 6.35, 0.1]],
+    [C(0.9, 1.2, 2.4, 6), 0xd07a42, [2.6, 1.2, 0.8]], [C(1.0, 0.9, 0.4, 6), 0xf0c080, [2.6, 2.6, 0.8]],
+  ]) },
+  drybush: { scale: [0.7, 1.5], make: () => merged([
+    [ico(0.7, 0), 0xb89a4a, [0, 0.5, 0], [1.2, 0.7, 1]], [ico(0.5, 0), 0xa8843a, [0.7, 0.35, 0.3]], [ico(0.45, 0), 0xc8aa5a, [-0.6, 0.3, -0.3]],
+    [C(0.03, 0.03, 1.1, 4), 0x7a5a2a, [0.2, 0.9, 0], null, [0, 0, -0.5]], [C(0.03, 0.03, 1.0, 4), 0x7a5a2a, [-0.2, 0.9, 0.1], null, [0.3, 0, 0.5]],
+  ]) },
+  // --- Copa Galaxia: fábrica de juguetes ---
+  toyblock: { scale: [0.9, 2.1], make: () => merged([ // torre de cubos con tejado
+    [B(2.6, 2.6, 2.6), 0xff3b4a, [0, 1.3, 0]], [B(2.2, 2.2, 2.2), 0xffd21f, [0.2, 3.7, 0.1], null, [0, 0.45, 0]], [B(1.8, 1.8, 1.8), 0x2b9dff, [0, 5.7, 0], null, [0, 0.15, 0]],
+    [K(1.5, 1.7, 4), 0x35e08a, [0, 7.45, 0], null, [0, PI / 4 + 0.15, 0]], [B(2.2, 2.2, 2.2), 0x7a5cff, [2.9, 1.1, 0.6], null, [0, 0.3, 0]],
+    [C(0.9, 0.9, 1.8, 10), 0xff7a1a, [-2.6, 0.9, -0.4]],
+  ]) },
+  toybrick: { scale: [0.9, 2], tint: true, make: () => { // ladrillos de construcción encajados
+    const p = [[B(4, 1.7, 2), 0xffffff, [0, 0.85, 0]], [B(2, 1.7, 2), 0xfff0c0, [-1, 2.55, 0]]];
+    for (const x of [1.5, 0.5]) for (const z of [-0.5, 0.5]) p.push([C(0.34, 0.34, 0.3, 8), 0xffffff, [x, 1.85, z]]);
+    for (const x of [-1.5, -0.5]) for (const z of [-0.5, 0.5]) p.push([C(0.34, 0.34, 0.3, 8), 0xfff0c0, [x, 3.55, z]]);
+    return merged(p);
+  } },
+  gear: { scale: [0.9, 1.9], tint: true, make: () => { // engranaje sobre un poste
+    const p = [[C(0.28, 0.4, 2.6, 6), 0x6a6a7a, [0, 1.3, 0]], [C(1.5, 1.5, 0.5, 14), 0xffffff, [0, 3.8, 0], null, [PI / 2, 0, 0]], [C(0.5, 0.5, 0.7, 8), 0x6a6a7a, [0, 3.8, 0], null, [PI / 2, 0, 0]]];
+    for (let i = 0; i < 8; i++) { const a = i / 8 * PI * 2; p.push([B(0.6, 0.7, 0.5), 0xffffff, [Math.cos(a) * 1.75, 3.8 + Math.sin(a) * 1.75, 0], null, [0, 0, a + PI / 2]]); }
+    return merged(p);
+  } },
+  crayon: { scale: [0.9, 1.9], tint: true, make: () => merged([ // ceras de colores clavadas en el suelo
+    [C(0.5, 0.5, 4.4, 8), 0xffffff, [0, 2.2, 0]], [C(0.53, 0.53, 1.3, 8), 0xfff6d8, [0, 2.2, 0]], [K(0.5, 1.2, 8), 0xffffff, [0, 5.0, 0]],
+    [C(0.42, 0.42, 3.2, 8), 0xdddddd, [1.3, 1.5, 0.4], null, [0.1, 0, -0.35]], [K(0.42, 1.0, 8), 0xdddddd, [2.04, 3.47, 0.6], null, [0.1, 0, -0.35]],
+  ]) },
+  toyball: { scale: [0.8, 1.9], tint: true, make: () => merged([
+    [ico(1.2, 1), 0xffffff, [0, 1.2, 0]], [new THREE.TorusGeometry(1.2, 0.14, 6, 16), 0xfff6c0, [0, 1.2, 0], null, [PI / 2, 0, 0]],
+    [new THREE.TorusGeometry(1.2, 0.14, 6, 16), 0xfff6c0, [0, 1.2, 0], null, [0, 0.6, 0]],
+  ]) },
+  spintop: { scale: [0.9, 1.8], tint: true, make: () => merged([ // peonza inclinada
+    [K(1.1, 1.6, 10), 0xffffff, [0.2, 0.8, 0], null, [PI, 0, 0.25]], [C(1.15, 1.15, 0.4, 10), 0xfff6c0, [-0.03, 1.75, 0], null, [0, 0, 0.25]],
+    [C(0.14, 0.14, 1.0, 6), 0xffffff, [-0.2, 2.42, 0], null, [0, 0, 0.25]], [ico(0.24, 0), 0xfff6c0, [-0.34, 2.98, 0]],
+  ]) },
+  // --- Copa Galaxia: estación espacial ---
+  moonrock: { scale: [0.7, 2.6], make: () => merged([
+    [new THREE.DodecahedronGeometry(1.3, 0), 0x8a8fb0, [0, 0.6, 0], [1.3, 0.75, 1]], [new THREE.DodecahedronGeometry(0.7, 0), 0x6a6f92, [1.2, 0.35, 0.4]],
+    [new THREE.DodecahedronGeometry(0.45, 0), 0xa8aed0, [-1.1, 0.25, -0.5]],
+  ]) },
+  crater: { scale: [1, 2.6], make: () => merged([ // cráter: anillo bajo con el fondo oscuro
+    [new THREE.TorusGeometry(2.4, 0.55, 5, 12), 0x9a9fc4, [0, 0.1, 0], [1, 1, 0.55], [PI / 2, 0, 0]], [C(2.3, 2.3, 0.12, 12), 0x4a4e72, [0, 0.12, 0]],
+  ]) },
+  stmodule: { scale: [1, 1.9], make: () => { // módulo habitable con cúpula, pasillo y cápsula
+    const p = [[C(2.2, 2.4, 2.4, 10), 0xe8ecf8, [0, 1.2, 0]], [new THREE.SphereGeometry(2.2, 10, 6, 0, PI * 2, 0, PI / 2), 0xf6f8ff, [0, 2.4, 0]], [C(2.46, 2.46, 0.35, 10), 0xff7a1a, [0, 0.95, 0]],
+      [B(1.0, 1.5, 0.3), 0x3a4262, [0, 0.95, 2.28]], [C(0.9, 0.9, 2.6, 8), 0xc8cce0, [3.3, 0.95, 0], null, [0, 0, PI / 2]], [C(1.3, 1.4, 1.9, 8), 0xe8ecf8, [5.3, 0.95, 0]],
+      [C(1.34, 1.34, 0.3, 8), 0x2b9dff, [5.3, 1.5, 0]], [C(0.05, 0.05, 2.4, 4), 0xc8cce0, [0, 5.6, 0]], [ico(0.2, 0), 0xff3b4a, [0, 6.8, 0]]];
+    for (let i = 0; i < 5; i++) { const a = 0.6 + i * 1.1; p.push([B(0.7, 0.5, 0.2), 0x7ff0ff, [Math.sin(a) * 2.25, 1.75, Math.cos(a) * 2.25], null, [0, a, 0]]); }
+    return merged(p);
+  } },
+  antenna: { scale: [1, 1.8], make: () => merged([ // antena parabólica
+    [B(0.9, 0.5, 0.9), 0x5a6088, [0, 0.25, 0]], [C(0.14, 0.24, 4.4, 6), 0x8a90b0, [0, 2.4, 0]], [C(1.7, 0.35, 0.8, 10), 0xeef2ff, [0, 4.9, 0.3], null, [0.7, 0, 0]],
+    [C(0.05, 0.05, 1.5, 4), 0x8a90b0, [0, 5.55, 1.05], null, [0.7, 0, 0]], [ico(0.2, 0), 0xff7a1a, [0, 6.1, 1.5]],
+  ]) },
+  solarpanel: { scale: [1, 1.7], make: () => {
+    const p = [[C(0.12, 0.18, 3, 6), 0x8a90b0, [0, 1.5, 0]], [B(0.3, 0.3, 5.6), 0xc8cce0, [0, 3.1, 0]]];
+    for (const z of [-1.75, 1.75]) {
+      p.push([B(2.6, 0.12, 3), 0x2a4ad8, [0, 3.2, z], null, [0, 0, 0.5]], [B(2.7, 0.16, 0.08), 0xd8e4ff, [0, 3.2, z], null, [0, 0, 0.5]]);
+      for (const x of [-0.65, 0.65]) p.push([B(0.08, 0.16, 3.06), 0xd8e4ff, [x * Math.cos(0.5), 3.2 + x * Math.sin(0.5), z], null, [0, 0, 0.5]]);
+    }
+    return merged(p);
+  } },
 };
 
 // Texturas de canvas reutilizables
