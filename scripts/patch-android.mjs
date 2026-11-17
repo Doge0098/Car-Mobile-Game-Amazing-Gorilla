@@ -6,6 +6,7 @@
 //   - permiso de vibración (navigator.vibrate)
 //   - número de versión sacado del número de ejecución de CI
 //   - firma de depuración con una clave fija, para que cada APK nuevo actualice al anterior
+//   - firma de publicación (Google Play) si quien compila pasa su clave por variables de entorno
 //
 // La carpeta android/ no se guarda en el repositorio: se crea de cero en cada compilación,
 // así que todo lo que haya que cambiar en ella tiene que estar aquí. Se puede ejecutar
@@ -23,7 +24,6 @@ const RES = join(MAIN, 'res');
 const KEYSTORE = join(ROOT, 'scripts', 'signing', 'debug.keystore');
 
 const rel = p => relative(ROOT, p).split(sep).join('/');
-const read = p => readFileSync(p, 'utf8');
 const log = msg => console.log(`patch-android: ${msg}`);
 function warn(msg) {
   // "::warning::" hace que GitHub Actions lo muestre destacado en el resumen de la ejecución.
@@ -32,6 +32,12 @@ function warn(msg) {
 function fail(msg) {
   console.error(process.env.GITHUB_ACTIONS ? `::error title=patch-android::${msg}` : `patch-android: ERROR: ${msg}`);
   process.exit(1);
+}
+// Lee un archivo que tiene que existir. Si falta, la plantilla de Capacitor ha cambiado y
+// es mejor parar aquí con un mensaje claro que seguir y fabricar una app a medias.
+function read(path) {
+  if (!existsSync(path)) fail(`no se encuentra ${rel(path)}. ¿Ha cambiado la plantilla de Capacitor?`);
+  return readFileSync(path, 'utf8');
 }
 function write(path, content) {
   mkdirSync(dirname(path), { recursive: true });
@@ -59,8 +65,25 @@ const buildNumber = Number(process.env.APK_BUILD_NUMBER || process.env.GITHUB_RU
 if (!Number.isInteger(buildNumber) || buildNumber < 1 || buildNumber > 2_000_000_000) {
   fail(`número de compilación no válido: "${process.env.APK_BUILD_NUMBER || process.env.GITHUB_RUN_NUMBER}"`);
 }
+// Desplazamiento opcional (variable ANDROID_VERSION_CODE_OFFSET del repositorio). Solo hace
+// falta si la cuenta de ejecuciones vuelve a empezar (workflow renombrado o repositorio
+// nuevo): Google Play no admite un versionCode igual o menor que uno ya subido.
+const offsetRaw = (process.env.APK_VERSION_CODE_OFFSET || '').trim();
+const offset = offsetRaw === '' ? 0 : Number(offsetRaw);
+if (!/^\d*$/.test(offsetRaw) || !Number.isInteger(offset)) {
+  fail(`ANDROID_VERSION_CODE_OFFSET tiene que ser un número entero sin signo y es "${offsetRaw}"`);
+}
+// 2 100 000 000 es el versionCode más alto que acepta Google Play.
+const versionCode = buildNumber + offset;
+if (versionCode > 2_100_000_000) fail(`versionCode demasiado alto: ${versionCode} (el máximo de Google Play es 2100000000)`);
 const [major = '1', minor = '0'] = String(pkg.version || '1.0.0').split('.');
-const versionName = `${major}.${minor}.${buildNumber}`;
+const versionName = `${major}.${minor}.${versionCode}`;
+
+// API de Android que Google Play exige como objetivo (targetSdkVersion) a las apps nuevas
+// y a las actualizaciones. Comprobado el 17-11-2026: API 36 (Android 16) desde el
+// 31-08-2026. Sube más o menos una vez al año, a finales de agosto.
+// https://developer.android.com/google/play/requirements/target-sdk
+const PLAY_TARGET_SDK = 36;
 
 // ---------------------------------------------------------------- AndroidManifest.xml
 
@@ -315,6 +338,10 @@ const BLOCK_END = '// <<< agr-patch';
 function patchGradle() {
   const path = join(APP, 'build.gradle');
   let gradle = read(path);
+  // El bloque de abajo está escrito en Groovy y cuenta con el plugin de aplicación Android.
+  if (!/com\.android\.application/.test(gradle)) {
+    fail(`${rel(path)} no aplica el plugin com.android.application. ¿Ha cambiado la plantilla de Capacitor?`);
+  }
 
   const previous = new RegExp(`\\n*${escapeRe(BLOCK_START)}[\\s\\S]*?${escapeRe(BLOCK_END)}\\n?`);
   gradle = gradle.replace(previous, '').replace(/\s*$/, '\n');
@@ -323,18 +350,16 @@ function patchGradle() {
   // tendría una firma distinta y Android se negaría a actualizar la app ya instalada
   // (habría que desinstalarla y se perdería la partida). Por eso se usa siempre la
   // misma clave de depuración, guardada en el repositorio.
-  let signing = '';
+  let debugSigning = '';
   if (existsSync(KEYSTORE)) {
     const storeFile = relative(APP, KEYSTORE).split(sep).join('/');
-    signing = `
-    signingConfigs {
+    debugSigning = `
         debug {
             storeFile file('${storeFile}')
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
-        }
-    }`;
+        }`;
   } else {
     warn(`falta ${rel(KEYSTORE)}: el APK se firmará con una clave nueva y no podrá actualizar una instalación anterior.`);
   }
@@ -342,11 +367,34 @@ function patchGradle() {
   gradle += `
 ${BLOCK_START} (generado por scripts/patch-android.mjs; se regenera en cada compilación)
 // Estos valores mandan sobre los de la plantilla de más arriba.
+
+// Firma de publicación (Google Play). Solo existe si quien compila pasa su almacén de
+// claves por variables de entorno, como hace el trabajo "play" del workflow. Ni la clave
+// ni sus contraseñas se escriben en ningún archivo: Gradle las lee del entorno al compilar.
+def agrReleaseStore = System.getenv('AGR_RELEASE_STORE_FILE')
+
 android {
     defaultConfig {
-        versionCode ${buildNumber}
+        versionCode ${versionCode}
         versionName "${versionName}"
-    }${signing}
+    }
+    signingConfigs {${debugSigning}
+        if (agrReleaseStore) {
+            release {
+                storeFile file(agrReleaseStore)
+                storePassword System.getenv('AGR_RELEASE_STORE_PASSWORD')
+                keyAlias System.getenv('AGR_RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('AGR_RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+    if (agrReleaseStore) {
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
 }
 
 dependencies {
@@ -357,7 +405,74 @@ dependencies {
 ${BLOCK_END}
 `;
   write(path, gradle);
-  log(`${rel(path)}: versionCode ${buildNumber}, versionName ${versionName}${signing ? ', firma de depuración fija' : ''}`);
+  log(`${rel(path)}: versionCode ${versionCode}, versionName ${versionName}${debugSigning ? ', firma de depuración fija' : ''}, firma de publicación si se pasa la clave`);
+}
+
+// ---------------------------------------------------------------- versiones del SDK
+
+// Lo que la plantilla de Capacitor fija en android/variables.gradle. Aquí no se cambia:
+// solo se lee, para dejarlo escrito en el registro y avisar si Google Play ya pide más.
+function reportSdk() {
+  const path = join(ANDROID, 'variables.gradle');
+  const text = existsSync(path) ? readFileSync(path, 'utf8') : '';
+  const level = key => {
+    const m = text.match(new RegExp(`\\b${key}\\s*=\\s*(\\d+)`));
+    return m ? Number(m[1]) : null;
+  };
+  const sdk = { min: level('minSdkVersion'), compile: level('compileSdkVersion'), target: level('targetSdkVersion') };
+  if (sdk.target === null) {
+    warn(`no se pudo leer targetSdkVersion en ${rel(path)}. Comprueba a mano que es ${PLAY_TARGET_SDK} o más: es lo que exige Google Play.`);
+    return sdk;
+  }
+  log(`SDK de Android: mínimo ${sdk.min ?? '?'}, compilación ${sdk.compile ?? '?'}, objetivo ${sdk.target} (Google Play exige objetivo ${PLAY_TARGET_SDK} o más)`);
+  if (sdk.target < PLAY_TARGET_SDK) {
+    warn(`la app apunta a la API ${sdk.target} de Android y Google Play exige la ${PLAY_TARGET_SDK} o más: Play rechazará esta versión. Hay que actualizar Capacitor en package.json.`);
+  }
+  return sdk;
+}
+
+// ---------------------------------------------------------------- comprobación final
+
+// Relee lo que ha quedado escrito. Si algo no está como debe (por ejemplo, porque la
+// plantilla de Capacitor ha cambiado de forma), la compilación se para aquí en vez de
+// fabricar una app que gira a vertical o que no se puede publicar.
+function verify() {
+  const problems = [];
+  const count = (text, re) => (text.match(re) || []).length;
+
+  const manifest = read(join(MAIN, 'AndroidManifest.xml'));
+  const activity = [...manifest.matchAll(/<activity\b[^>]*>/g)].map(m => m[0])
+    .find(t => /android:name\s*=\s*"[^"]*\.MainActivity"/.test(t)) || '';
+  if (count(activity, /android:screenOrientation\s*=/g) !== 1
+    || !/android:screenOrientation\s*=\s*"sensorLandscape"/.test(activity)) {
+    problems.push('la actividad principal no tiene android:screenOrientation="sensorLandscape" (una sola vez)');
+  }
+  const application = (manifest.match(/<application\b[^>]*>/) || [''])[0];
+  if (!/android:appCategory\s*=\s*"game"/.test(application)) problems.push('<application> no tiene android:appCategory="game"');
+  if (count(manifest, /"android\.permission\.VIBRATE"/g) !== 1) problems.push('el permiso VIBRATE no aparece exactamente una vez');
+
+  const activityJava = read(join(MAIN, 'java', ...appId.split('.'), 'MainActivity.java'));
+  for (const piece of [`package ${appId};`, 'FLAG_KEEP_SCREEN_ON', 'controller.hide(WindowInsetsCompat.Type.systemBars())']) {
+    if (!activityJava.includes(piece)) problems.push(`MainActivity.java no contiene "${piece}"`);
+  }
+
+  const styles = read(join(RES, 'values', 'styles.xml'));
+  for (const name of ['AppTheme.NoActionBar', 'AppTheme.NoActionBarLaunch']) {
+    if (count(styles, new RegExp(`<style\\s+name="${escapeRe(name)}"`, 'g')) !== 1) problems.push(`styles.xml no tiene una sola vez el estilo ${name}`);
+  }
+
+  const gradle = read(join(APP, 'build.gradle'));
+  if (gradle.split(BLOCK_START).length !== 2 || gradle.split(BLOCK_END).length !== 2) {
+    problems.push('app/build.gradle no tiene exactamente un bloque agr-patch');
+  } else {
+    const block = gradle.slice(gradle.indexOf(BLOCK_START), gradle.indexOf(BLOCK_END));
+    for (const piece of [`versionCode ${versionCode}\n`, `versionName "${versionName}"`, 'signingConfig signingConfigs.release']) {
+      if (!block.includes(piece)) problems.push(`el bloque agr-patch de app/build.gradle no contiene "${piece.trim()}"`);
+    }
+  }
+
+  if (problems.length) fail(`el proyecto Android no ha quedado como se esperaba: ${problems.join('; ')}.`);
+  log('comprobado: horizontal fijo, pantalla completa, versión y firma en su sitio');
 }
 
 // ---------------------------------------------------------------- ejecución
@@ -375,9 +490,12 @@ try {
 }
 patchGradle();
 if (existsSync(join(ANDROID, 'gradlew'))) chmodSync(join(ANDROID, 'gradlew'), 0o755);
+verify();
+const sdk = reportSdk();
 
 // Para que el workflow pueda poner la versión en la página de descarga.
 if (process.env.GITHUB_OUTPUT) {
-  appendFileSync(process.env.GITHUB_OUTPUT, `version_code=${buildNumber}\nversion_name=${versionName}\n`);
+  appendFileSync(process.env.GITHUB_OUTPUT,
+    `version_code=${versionCode}\nversion_name=${versionName}\ntarget_sdk=${sdk.target ?? ''}\n`);
 }
 log('listo');
