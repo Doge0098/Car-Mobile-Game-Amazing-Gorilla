@@ -198,6 +198,10 @@ export const TRACKS = [
     deepAll: true, tunnel: [0.61, 0.68], ringsAt: [0.14, 0.25, 0.38, 0.5, 0.75, 0.88], ramps: [],
     extras: { weather: 'none', hazard: 'crab', life: null, liquidMode: 0, lamp: 0x7ff0ff, deck: 0x6a7a9a, tunnelCol: 0x4a6a8a, tunnelGlow: 0x7ff0ff, puddle: null, mark: 0x2a3a5a, ambience: '' },
   },
+];
+
+// Pistas que no aparecen en las listas de carrera
+export const EXTRA_TRACKS = [
   {
     // pista pequeña y ancha para la batalla de globos (no aparece en las listas de carrera)
     id: 'arena', name: 'Arena Gorila', cup: -1, hidden: true, R: 108, width: 26,
@@ -237,7 +241,7 @@ export const RACERS = 6;
 export const MENU_MUSIC = { tempo: 116, root: 57, scale: 'major', prog: [0, 5, 3, 4], seed: 1, style: 'menu' };
 export const PODIUM_MUSIC = { tempo: 126, root: 60, scale: 'major', prog: [0, 3, 4, 0], seed: 44, style: 'podium' };
 
-export function trackById(id) { return TRACKS.find(t => t.id === id); }
+export function trackById(id) { return TRACKS.find(t => t.id === id) || EXTRA_TRACKS.find(t => t.id === id); }
 export function charById(id) { return CHARACTERS.find(c => c.id === id) || CHARACTERS[0]; }
 export function kartById(id) { return KARTS.find(k => k.id === id) || KARTS[0]; }
 
