@@ -201,16 +201,28 @@ export function buildTrack(def, opts = {}) {
 
   // ---- Atajo: un trampolín en el arcén interior que lanza el coche por encima de la curva ----
   let shortcut = null;
-  if (!def.noShortcut) {
-    const span = 46; let best = 0, bi = -1;
-    for (let i = 50; i < N - 70; i += 2) {
-      let ok = true; for (let k = -8; k <= span + 8; k += 4) { const q = samples[i + k]; if (special(q) || q.tun || nearRamp(i + k)) { ok = false; break; } }
-      if (!ok) continue;
-      const a0 = samples[i], b0 = samples[i + span], save = span * spacing - Math.hypot(b0.x - a0.x, b0.z - a0.z);
-      let turn = 0; for (let k = 0; k < span; k += 4) turn += samples[i + k].curv;
-      if (save > best && Math.abs(turn) > 0.05) { best = save; bi = i; }
+  if (!def.noShortcut && !def.deepAll) { // (bajo el mar no hay trampolines)
+    // se busca la curva libre (sin túnel, puente, agua ni rampas) donde más se ahorra; primero con saltos largos
+    let span = 0, best = 0, bi = -1;
+    for (const sp of [64, 52, 40, 30]) {
+      let b = 0, at = -1;
+      for (let i = 50; i < N - sp - 24; i += 2) {
+        // el despegue y el aterrizaje deben estar en carretera normal; por el aire se puede pasar sobre rampas y puentes,
+        // pero no sobre túneles ni tramos de barco, vuelo o submarino
+        let ok = true;
+        for (let k = -8; k <= sp + 8 && ok; k += 4) {
+          const q = samples[i + k], edge = k <= 8 || k >= sp - 8;
+          if (q.tun || q.kt > 0.02 || q.kz > 0.02 || (edge && (special(q) || nearRamp(i + k)))) ok = false;
+        }
+        if (!ok) continue;
+        const a0 = samples[i], b0 = samples[i + sp], save = sp * spacing - Math.hypot(b0.x - a0.x, b0.z - a0.z);
+        let turn = 0; for (let k = 0; k < sp; k += 4) turn += samples[i + k].curv;
+        if (save > b && Math.abs(turn) > 0.02) { b = save; at = i; }
+      }
+      if (b > best) { best = b; bi = at; span = sp; }
+      if (best > 9) break;
     }
-    if (bi >= 0 && best > 14) {
+    if (bi >= 0 && best > 1) {
       let turn = 0; for (let k = 0; k < span; k += 4) turn += samples[bi + k].curv;
       const side = turn > 0 ? 1 : -1, a0 = samples[bi], b0 = samples[bi + span];
       shortcut = { i0: bi, i1: bi + span, side, lat: side * (hw + 4.6), ex: a0.x + a0.nx * side * (hw + 4.6), ez: a0.z + a0.nz * side * (hw + 4.6), ey: a0.y,
@@ -680,7 +692,11 @@ export function buildTrack(def, opts = {}) {
       rings.push({ idx: i, lat, x, z, y: s.y + s.air + up, up, air: s.air > 0, mesh: m, cd: new Float32Array(8) });
     };
     // en el vuelo los aros están a distinta altura: hay que subir o bajar para cogerlos
-    glRs.forEach(r => [0.26, 0.5, 0.74].forEach((t, n) => addRing(Math.round(r[0] + (r[1] - r[0]) * t), [-3, 2.5, -1][n], [1.4, 3.8, -3.0][n], n)));
+    // (en los vuelos cortos solo hay tiempo para dos)
+    glRs.forEach(r => {
+      const long = r[1] - r[0] > 48;
+      (long ? [0.2, 0.5, 0.8] : [0.3, 0.72]).forEach((t, n) => addRing(Math.round(r[0] + (r[1] - r[0]) * t), [-2, 1.5, -1][n], (long ? [1.4, 3.8, -3.0] : [1.2, 3.6])[n], n));
+    });
     subs.forEach((r, k) => { const a = fIdx(r[0] + r[2]), b = fIdx(r[1] - r[2]); [0.15, 0.5, 0.85].forEach((t, n) => addRing(Math.round(a + (b - a) * t), [2.5, -3, 1.5][n], 2.4, n + 1 + k)); });
     (def.ringsAt || []).forEach((u, n) => addRing(fIdx(u), [2.5, -3, 1.5, -1][n % 4], 2.4, n));
   }

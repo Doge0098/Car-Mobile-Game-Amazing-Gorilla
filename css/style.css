@@ -243,3 +243,22 @@ html, body {
   .lefty .ctl-right { flex-direction: column-reverse; align-items: flex-start; }
   .lefty .ctl.item { margin: 0; }
 }
+
+/* ---------- Modos, repetición y modo foto ---------- */
+.btn.c9 { background: linear-gradient(#ff7a9a, #e0245a); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 10px; justify-content: center; padding: 6px 0 0; flex: none; }
+.toolbar .seg button { padding: 6px 12px; }
+.hud-mode { left: calc(16px + var(--sa-l)); top: calc(clamp(58px, 14.5vmin, 100px) + var(--sa-t)); font-size: clamp(14px, 3vmin, 20px); background: rgba(16, 6, 46, .7); padding: 3px 12px; border-radius: 999px; border: 2px solid var(--yellow); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hud-mode.danger { background: #e01b2f; border-color: #fff; animation: pulse .4s infinite alternate; transform-origin: left center; }
+.results li.out { opacity: .6; } .results li.rival b::after { content: ' ⚔️'; font-style: normal; font-size: 13px; }
+.screen.replay { pointer-events: none; justify-content: space-between; align-items: flex-start; }
+.replay-tag { background: #e01b2f; border: 3px solid #fff; border-radius: 12px; padding: 4px 14px; font-style: italic; font-size: clamp(15px, 3.4vmin, 22px); animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+#replay-skip { pointer-events: auto; align-self: flex-end; }
+.screen.photo { justify-content: space-between; align-items: center; touch-action: none; cursor: grab; }
+.photo-tip { margin: 0; background: rgba(16, 6, 46, .6); border-radius: 999px; padding: 4px 14px; font-size: 13px; transition: opacity .4s; }
+.photo-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; background: rgba(16, 6, 46, .6); border-radius: 18px; padding: 6px 12px; max-width: 100%; }
+.photo-bar label { font-size: 13px; } .photo-bar input { max-width: 150px; }
+.screen.photo.shot > * { visibility: hidden; }
+.rowbtns { flex-wrap: wrap; } .rowbtns .btn { min-width: 110px; }
+html[lang=en] .help[lang=es], html[lang=es] .help[lang=en] { display: none; }

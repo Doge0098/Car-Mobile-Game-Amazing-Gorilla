@@ -8,7 +8,8 @@ export function tryShortcut(r, tr) {
   const dx = r.x - sc.ex, dz = r.z - sc.ez;
   if (dx * dx + dz * dz > 8) return false;
   const dist = Math.hypot(sc.lx - r.x, sc.lz - r.z);
-  r.flight = { t: 0, dur: dist / (Math.max(r.speed, 38) * 1.12), x0: r.x, z0: r.z, y0: r.y, h: Math.atan2(sc.lx - r.x, sc.lz - r.z) };
+  // el vuelo es más rápido que ir por la carretera: ahí está la ventaja del atajo
+  r.flight = { t: 0, dur: dist / (Math.max(r.speed, r.maxSpeed * 0.95) * 1.3), top: Math.min(15, 5 + dist * 0.045), x0: r.x, z0: r.z, y0: r.y, h: Math.atan2(sc.lx - r.x, sc.lz - r.z) };
   r.drifting = false; r.charge = 0;
   return true;
 }
@@ -20,10 +21,11 @@ export function stepFlight(r, dt, tr) {
   r.x = f.x0 + (sc.lx - f.x0) * k; r.z = f.z0 + (sc.lz - f.z0) * k;
   r.h += wrapA((k < 0.75 ? f.h : sc.lh) - r.h) * Math.min(1, dt * 7);
   r.vx = Math.sin(r.h) * r.speed; r.vz = Math.cos(r.h) * r.speed;
-  r.y = f.y0 + (sc.ly - f.y0) * k; r.hopY = Math.sin(Math.PI * k) * 9; r.hopV = 0; r.steer *= 0.9;
+  r.y = f.y0 + (sc.ly - f.y0) * k; r.hopY = Math.sin(Math.PI * k) * f.top; r.hopV = 0; r.steer *= 0.9;
   if (k < 1) return true;
   let d = sc.i1 - r.idx; if (d < -N / 2) d += N; if (d > N / 2) d -= N;
   r.prog += d; r.idx = sc.i1; r.y = sc.ly; r.hopY = 0; r.h = sc.lh; r.lat = sc.llat; r.flight = null;
+  r.speed = Math.max(r.speed, r.maxSpeed); r.vx = Math.sin(r.h) * r.speed; r.vz = Math.cos(r.h) * r.speed;
   return false;
 }
 
@@ -44,6 +46,6 @@ export function gliderAlt(r, ctl, tr, dt) {
   let target = 0;
   if (r.isPlayer && !r.finished) target = ctl.drift ? 3.4 : ctl.brake ? -3.0 : 0;
   else for (const rg of tr.rings) { if (!rg.air) continue; let di = rg.idx - r.idx; if (di < 0) di += tr.N; if (di < 26) { target = (rg.up - 0.9) * (r.skill > -0.01 ? 1 : 0.4); break; } }
-  r.alt = (r.alt || 0) + (target - (r.alt || 0)) * Math.min(1, dt * 3.2);
+  r.alt = (r.alt || 0) + (target - (r.alt || 0)) * Math.min(1, dt * 4.2);
   return r.alt;
 }

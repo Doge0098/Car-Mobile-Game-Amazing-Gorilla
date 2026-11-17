@@ -40,7 +40,8 @@
   <nav class="menu">
     <button class="btn c1" data-go="race">🏁 Carrera rápida</button>
     <button class="btn c2" data-go="cups">🏆 Copas</button>
-    <button class="btn c3" data-go="time">⏱️ Contrarreloj</button>
+    <button class="btn c3 half" data-go="time">⏱️ Contrarreloj</button>
+    <button class="btn c9 half" data-go="battle">🎈 Batalla de globos</button>
     <button class="btn c4 half" data-go="garage">🦍 Garaje</button>
     <button class="btn c7 half" data-go="meta">🏅 Misiones y logros</button>
     <button class="btn c5 half" data-go="settings">⚙️ Ajustes</button>
@@ -66,6 +67,10 @@
     <h2 id="tracks-title">Elige mapa</h2>
     <div class="seg" id="diff-seg"></div>
   </header>
+  <div class="toolbar" id="tracks-bar">
+    <div class="seg" id="kind-seg"><button data-v="race">Carrera</button><button data-v="elim">Eliminación</button></div>
+    <div class="seg" id="variant-seg"><button data-v="">Normal</button><button data-v="mirror">Espejo</button><button data-v="reverse">Inverso</button></div>
+  </div>
   <div class="cards" id="track-cards"></div>
 </section>
 
@@ -122,6 +127,7 @@
     <h2>Ajustes</h2><span></span>
   </header>
   <div class="settings">
+    <div class="row"><label>Idioma</label><div class="seg" id="set-lang"><button data-v="es">Español</button><button data-v="en">English</button></div></div>
     <div class="row"><label>Controles</label><div class="seg" id="set-controls">
       <button data-v="buttons">Botones</button><button data-v="tilt">Inclinar móvil</button></div></div>
     <div class="row"><label>Tamaño de botones</label><div class="seg" id="set-btnsize">
@@ -138,7 +144,7 @@
     <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Vibración</label><div class="seg" id="set-haptics"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Progreso</label><button class="btn small danger" id="set-reset">Borrar partida</button></div>
-    <p class="help">
+    <p class="help" lang="es" data-noi18n>
       <b>Cómo jugar:</b> el coche acelera solo. Gira con ◀ ▶ (o inclinando el móvil), mantén <b>DERRAPE</b> en las curvas
       y suéltalo para un mini-turbo (chispas azules → naranjas → moradas). Coge cajas <b>?</b> y pulsa el objeto para usarlo.
       Los plátanos 🍌 te hacen más rápido y sirven para comprar en el garaje.<br>
@@ -146,13 +152,39 @@
       para hacer una acrobacia que da impulso al aterrizar.<br>
       <b>Objetos:</b> 🍌 turbo · 🥥 coco teledirigido · 🍂 cáscara · 🛡️ escudo · 🥁 onda expansiva · 🦍 furia ·
       ⚡ rayo que encoge a los rivales · 🧲 imán de plátanos · 🛢️ barril que rebota.<br>
-      <b>Transformaciones:</b> en cada mapa hay un tramo de agua (barco), una gran rampa (ala delta) y una inmersión (submarino);
-      el coche se transforma solo. Pasa por los aros para ganar impulso.<br>
+      <b>Transformaciones:</b> el coche se convierte solo en barco, ala delta o submarino según el tramo. Con el ala delta,
+      <b>DERRAPE</b> sube y <b>FRENO</b> baja: los aros están a distinta altura. En el agua, las franjas con flechas son corrientes que te empujan.<br>
+      <b>Atajos:</b> busca el trampolín verde «ATAJO» en el arcén de algunas curvas: te lanza por encima.<br>
+      <b>Modos:</b> en <b>Eliminación</b> el último queda fuera cada pocos segundos; en la <b>Batalla de globos</b> cada golpe revienta un globo y gana quien conserve más.
+      Los circuitos se pueden correr también en <b>espejo</b> o en sentido <b>inverso</b>.<br>
+      <b>Rival:</b> un gorila te reta en cada carrera y se adapta a tu nivel. Si acabas por delante, hay premio extra.<br>
+      <b>Repetición y fotos:</b> al terminar puedes ver la repetición, y en la pausa hay un modo foto.<br>
       <b>Gráficos:</b> con la <b>calidad automática</b>, si el juego va lento se quitan solos sombras, contorno y resplandor. También puedes bajar el nivel a mano.<br>
       <b>Botones:</b> puedes cambiar su tamaño y su opacidad, o pasarlos al otro lado con el modo zurdo (dirección a la derecha).<br>
       <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, H = bocina, P = pausa.<br>
       <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
       En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
+    </p>
+    <p class="help" lang="en" data-noi18n>
+      <b>How to play:</b> the kart accelerates by itself. Steer with ◀ ▶ (or by tilting the phone), hold <b>DRIFT</b> in corners
+      and release it for a mini-turbo (blue → orange → purple sparks). Grab <b>?</b> boxes and tap the item to use it.
+      Bananas 🍌 make you faster and are the currency of the garage.<br>
+      <b>Tricks:</b> press <b>DRIFT</b> right on “GO!” for a turbo start, and again in mid-air after a blue ramp
+      to do a stunt that gives a boost on landing.<br>
+      <b>Items:</b> 🍌 turbo · 🥥 homing coconut · 🍂 peel · 🛡️ shield · 🥁 shockwave · 🦍 fury ·
+      ⚡ lightning that shrinks rivals · 🧲 banana magnet · 🛢️ bouncing barrel.<br>
+      <b>Transformations:</b> the kart turns into a boat, a hang glider or a submarine depending on the section. While gliding,
+      <b>DRIFT</b> climbs and <b>BRAKE</b> dives: rings sit at different heights. On water, the arrow strips are currents that push you.<br>
+      <b>Shortcuts:</b> look for the green “SHORTCUT” spring pad on the shoulder of some corners: it throws you over the bend.<br>
+      <b>Modes:</b> in <b>Elimination</b> the last racer is knocked out every few seconds; in <b>Balloon Battle</b> every hit pops a balloon and whoever keeps the most wins.
+      Every track can also be raced <b>mirrored</b> or in <b>reverse</b>.<br>
+      <b>Rival:</b> one gorilla challenges you in every race and adapts to your level. Finish ahead of them for a bonus.<br>
+      <b>Replay and photos:</b> watch a replay when a race ends, and use photo mode from the pause menu.<br>
+      <b>Graphics:</b> with <b>automatic quality</b>, shadows, outline and glow are switched off by themselves if the game runs slowly. You can also lower the level by hand.<br>
+      <b>Buttons:</b> you can change their size and opacity, or swap sides with left-handed mode (steering on the right).<br>
+      <b>Keyboard:</b> arrows / A-D, Space = drift, E = item, H = horn, P = pause.<br>
+      <b>Install:</b> on Android use “Install game” or the browser menu → “Add to Home screen”.
+      On iPhone: Share → “Add to Home Screen”. After that it works offline.
     </p>
   </div>
 </section>
@@ -160,7 +192,8 @@
 <!-- HUD -->
 <section id="hud" class="screen hud">
   <div class="hud-pos"><span id="hud-pos">1</span><small id="hud-pos-suf">º</small><i id="hud-total">/6</i></div>
-  <div class="hud-lap">Vuelta <b id="hud-lap">1</b>/<span id="hud-laps">3</span></div>
+  <div class="hud-lap" id="hud-lapbox">Vuelta <b id="hud-lap">1</b>/<span id="hud-laps">3</span></div>
+  <div class="hud-mode hidden" id="hud-mode"></div>
   <div class="hud-item" id="hud-item"><span id="hud-item-icon"></span><em id="hud-item-count"></em></div>
   <div class="hud-right">
     <button class="btn pause" id="btn-pause">❚❚</button>
@@ -194,6 +227,7 @@
     <ul class="missions" id="p-missions"></ul>
     <button class="btn c1" id="p-resume">▶ Continuar</button>
     <button class="btn c3" id="p-restart">↻ Reiniciar</button>
+    <button class="btn c7" id="p-photo">📷 Modo foto</button>
     <button class="btn c5" id="p-quit">✕ Salir al menú</button>
   </div>
 </section>
@@ -218,9 +252,26 @@
     </div>
     <div class="reward" id="r-reward"></div>
     <div class="rowbtns">
+      <button class="btn c7" id="r-replay">🎬 Repetición</button>
       <button class="btn c3" id="r-retry">↻ Repetir</button>
       <button class="btn c1" id="r-next">Continuar ▶</button>
     </div>
+  </div>
+</section>
+
+<!-- REPETICIÓN -->
+<section id="s-replay" class="screen replay">
+  <div class="replay-tag">● REPETICIÓN</div>
+  <button class="btn c5 small" id="replay-skip">Saltar ▶</button>
+</section>
+
+<!-- MODO FOTO -->
+<section id="s-photo" class="screen photo">
+  <p class="photo-tip">Arrastra para girar la cámara</p>
+  <div class="photo-bar">
+    <label>Zoom</label><input type="range" id="photo-zoom" min="4" max="30" step="0.5" value="10">
+    <button class="btn c1 small" id="photo-save">📸 Guardar foto</button>
+    <button class="btn c5 small" id="photo-back">Volver</button>
   </div>
 </section>
 

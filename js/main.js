@@ -13,6 +13,8 @@ import { Post } from './post.js';
 import { Podium } from './podium.js';
 import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
 import { Tutorial, TUTORIAL } from './tutorial.js';
+import { buildShowroom } from './showroom.js';
+import { t, lang, setLang, initI18n } from './i18n.js';
 import { MISSIONS, MISSION_COUNT, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
@@ -62,29 +64,17 @@ function resize() {
 
 // ---------- Escaparate del menú ----------
 const menuScene = new THREE.Scene();
-const menuCam = new THREE.PerspectiveCamera(42, 1, 0.3, 300);
-let showModel = null, showKart = null, showGorilla = null, showPound = 0, showSpin = 0.6, menuRing = null;
+const menuCam = new THREE.PerspectiveCamera(42, 1, 0.3, 700);
+let showModel = null, showKart = null, showGorilla = null, showPound = 0, showSpin = 0.6, menuRing = null, showroom = null;
 {
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(120, 24, 14), new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false,
-    vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vP; void main(){ vec3 n = normalize(vP); float h = n.y * 0.5 + 0.5;
-      vec3 c = mix(vec3(1.0,0.31,0.75), vec3(0.16,0.06,0.5), smoothstep(0.35,0.95,h));
-      c = mix(vec3(1.0,0.72,0.12), c, smoothstep(0.2,0.52,h));
-      float rays = step(0.5, fract(atan(n.x, n.z) * 3.8197)); c += rays * 0.05 * (1.0 - h);
-      gl_FragColor = vec4(c, 1.0);
-      #include <colorspace_fragment>
-      }`,
-  }));
-  menuScene.add(dome);
-  menuScene.add(new THREE.HemisphereLight(0xffffff, 0xff7ad8, 1.5));
-  const d = new THREE.DirectionalLight(0xffffff, 1.9); d.position.set(2, 4, 3); menuScene.add(d);
+  // el escenario (cielo, colinas, vegetación, banderines y focos) está en showroom.js
+  showroom = buildShowroom(menuScene);
+  menuScene.add(new THREE.HemisphereLight(0xffffff, 0x9be8a0, 1.45));
+  const d = new THREE.DirectionalLight(0xfff4d8, 1.9); d.position.set(-3, 5, 4); menuScene.add(d);
   const plat = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4, 0.5, 40), new THREE.MeshLambertMaterial({ color: 0x7a5cff }));
   plat.position.y = -0.26; menuScene.add(plat);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.12, 8, 48), new THREE.MeshBasicMaterial({ color: 0x22e6ff }));
   ring.rotation.x = Math.PI / 2; ring.position.y = 0; menuScene.add(ring); menuRing = ring;
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 40), new THREE.MeshLambertMaterial({ color: 0xff8ad8 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = -0.5; menuScene.add(floor);
   menuCam.position.set(0, 3.1, 10.5); menuCam.lookAt(0, 1.3, 0);
 }
 let showOff = [0, 0];
@@ -135,7 +125,7 @@ function updateShowTrail() {
 
 // ---------- Pantallas ----------
 let screen = 'title';
-const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0] };
+const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0], tutoask: [0.2, 0] };
 function placeShow() {
   const o = OFFSETS[screen]; if (!o) return;
   const portrait = innerWidth < innerHeight;
@@ -189,24 +179,46 @@ const rivalBuf = [{ pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }, 
 // Reglas propias de cada modo; lo que no aparece usa los valores normales. Los modos nuevos se añaden aquí.
 //  laps · rivals (número de rivales) · difficulty · tune (ajustes del jugador en lugar de sus mejoras)
 //  aiItems: false (los rivales no cogen objetos) · noHazards (sin obstáculos) · podium (escena de podio al acabar)
+//  track: pista fija del modo
 const MODE_RULES = {
   race: { podium: true },
   cup: {},
   time: {},
+  elim: { podium: true },                                      // eliminación: el último queda fuera cada pocos segundos
+  battle: { podium: true, track: 'arena', noHazards: true },   // batalla de globos en la arena
   tutorial: TUTORIAL,
 };
+const VARIANT_MODES = ['race', 'time', 'elim']; // modos en los que se puede correr en espejo o al revés
+let variant = '', raceKind = 'race';            // variante del circuito ('' | 'mirror' | 'reverse') y tipo de carrera rápida ('race' | 'elim')
+let replaying = false, photo = false, glideHints = 0, curHints = 0;
+const ph = { a: 0, e: 0.22, d: 10, keep: null }; // cámara del modo foto: ángulo, elevación y distancia
+const recKey = () => currentTrack.id + (variant ? ':' + variant : ''); // clave de récords y fantasmas
 const rules = () => MODE_RULES[mode] || {};
 let tuto = null, tutoRev = -1; // tutorial en curso
 const TUTO_BTNS = ['btn-left', 'btn-right', 'btn-drift', 'btn-item', 'btn-brake', 'hud-item'];
 
-const cup1Unlocked = () => Object.keys(save.trophies).some(k => k.startsWith('platano_'));
-const trackUnlocked = t => t.cup === 0 || cup1Unlocked();
+// cada copa se desbloquea con un trofeo en la anterior
+const cupUnlocked = i => i <= 0 || Object.keys(save.trophies).some(k => k.startsWith(CUPS[i - 1].id + '_'));
+const trackUnlocked = t => cupUnlocked(t.cup);
+const lockText = i => fill(t('Gana un trofeo en la {cup}'), { cup: t(CUPS[i - 1].name) });
+
+// Rival personal: un gorila fijo que te reta en cada carrera y se adapta a tu nivel (save.rival)
+const RIVAL_MIN = -3, RIVAL_MAX = 6, RIVAL_BONUS = 25;
+function rivalDef() {
+  const rv = save.rival;
+  if (!rv.char || rv.char === save.char || !CHARACTERS.some(c => c.id === rv.char)) {
+    const pool = CHARACTERS.filter(c => c.id !== save.char); rv.char = pool[Math.floor(Math.random() * pool.length)].id; persist();
+  }
+  return { char: rv.char, level: Math.max(RIVAL_MIN, Math.min(RIVAL_MAX, rv.level | 0)) };
+}
+const hasRival = () => mode !== 'tutorial' && mode !== 'time';
 const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
 
 // Parrilla de rivales al azar: [{ char, kart, color }] (en una copa se mantiene durante sus carreras)
 function makeLineup(n) {
   const mix = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const chars = mix(CHARACTERS.filter(c => c.id !== save.char)), karts = mix(KARTS.slice());
+  if (hasRival()) { const rc = rivalDef().char, i = chars.findIndex(c => c.id === rc); if (i > 0) chars.unshift(chars.splice(i, 1)[0]); } // el rival siempre corre
   // cada modelo de coche rival lleva siempre el mismo color: así las geometrías en caché no crecen sin límite
   return Array.from({ length: n }, (_, i) => { const k = karts[i % karts.length]; return { char: chars[i % chars.length].id, kart: k.id, color: 1 + (KARTS.indexOf(k) * 3) % (KART_COLORS.length - 1) }; });
 }
@@ -220,6 +232,7 @@ function disposeRace() {
   if (ambient) ambient.dispose();
   if (fxAdd) { fxAdd.points.geometry.dispose(); fxAdd.mat.dispose(); fxNorm.points.geometry.dispose(); fxNorm.mat.dispose(); }
   race = track = raceScene = fxAdd = fxNorm = ambient = tuto = null;
+  replaying = photo = false; gliderButtons(false);
   $('speedfx').classList.remove('on');
 }
 
@@ -228,12 +241,14 @@ function startRace(trackId) {
   $('loading').classList.remove('hidden');
   setTimeout(() => {
     disposeRace();
-    currentTrack = trackById(trackId);
+    const R = rules();
+    currentTrack = trackById(R.track || trackId);
+    if (!VARIANT_MODES.includes(mode)) variant = '';
     syncGfx();
     const q = qualityK();
     const gfx = { quality: q, bloom: usePost(), shadows: G.shadows, outline: G.outline };
     renderer.shadowMap.enabled = gfx.shadows;
-    track = buildTrack(currentTrack, gfx);
+    track = buildTrack(currentTrack, { ...gfx, variant: variant || null });
     raceScene = new THREE.Scene();
     raceScene.fog = track.fog; raceScene.background = new THREE.Color(currentTrack.theme.fog);
     raceScene.add(track.group);
@@ -241,13 +256,13 @@ function startRace(trackId) {
     raceScene.add(fxAdd.points, fxNorm.points);
     ambient = new Ambient(currentTrack.theme.fx, currentTrack.theme.fxColor, q < 0.7 ? 60 : 140);
     raceScene.add(ambient.points);
-    const R = rules();
     race = new Race({
       scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: R.difficulty || diff(), laps: R.laps, ...gfx,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
       playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
       rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
-      ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
+      rivalDef: hasRival() ? rivalDef() : null,
+      ghostData: mode === 'time' ? save.ghosts[recKey()] : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; frameAvg = 1 / 60; lowT = 0; stepGap = 2;
     hint('');
@@ -263,11 +278,17 @@ function startRace(trackId) {
     $('hud-pos').parentElement.style.visibility = mode === 'time' ? 'hidden' : 'visible';
     $('hud').classList.toggle('tilt', save.settings.controls === 'tilt');
     $('hud-wrong').classList.add('hidden');
+    $('hud-lapbox').classList.toggle('hidden', !!race.rules); $('hud-mode').classList.toggle('hidden', !race.rules);
     show('hud');
     startMusic(currentTrack.music);
-    A.startAmbience?.(currentTrack.music.style); A.playJingle?.('start');
+    const amb = currentTrack.extras.ambience; // '' = sin sonido de ambiente (bajo el mar)
+    if (amb !== '') A.startAmbience?.(amb || currentTrack.music.style);
+    A.playJingle?.('start');
     startEngine();
-    hudMsg(currentTrack.name, true);
+    hudMsg(t(currentTrack.name), true);
+    if (mode === 'elim') hint('Cada pocos segundos, el último queda eliminado. ¡No te quedes atrás!');
+    else if (mode === 'battle') hint('Golpea a tus rivales con objetos para reventar sus globos. ¡Protege los tuyos!');
+    else if (race.rival && !tuto) hint(fill(t('⚔️ Tu rival es {name}: acaba por delante para ganar un premio extra'), race.rival.char));
     $('loading').classList.add('hidden');
   }, 60);
 }
@@ -308,7 +329,7 @@ function showTutorialResults() {
   $('r-missions').innerHTML = tuto.summary().map(l => `<li class="${l.done ? 'ok' : 'ko'}"><i>${l.done ? '✓' : '✗'}</i><span>${l.text}</span><b></b><em></em></li>`).join('');
   $('r-missions').classList.remove('hidden');
   $('r-reward').textContent = first ? fill('+{n} 🍌 por terminar el tutorial', { n: reward }) : 'Ya tenías el premio del tutorial';
-  $('r-retry').classList.remove('hidden'); $('r-next').textContent = 'Menú ▶';
+  $('r-retry').classList.remove('hidden'); $('r-next').textContent = 'Menú ▶'; $('r-replay').classList.add('hidden');
   save.tutorial = 'done'; if (reward) earn(reward);
   persist(); renderTuto();
   show('results');
@@ -327,18 +348,33 @@ function onRaceEvent(ev, data) {
   else if (ev === 'stall') { setTimeout(() => hudMsg('¡Demasiado pronto!', true), 650); sfx.stall?.(); }
   else if (ev === 'ramp') { if (rampHints++ < 2) hint('¡Pulsa DERRAPE en el aire para hacer un truco!'); }
   else if (ev === 'trick') hudMsg('¡Truco! 🌀', true);
-  else if (ev === 'mode') hudMsg({ glide: '¡Ala delta! 🪂', boat: '¡Al agua! 🚤', sub: '¡Inmersión! 🤿' }[data], true);
+  else if (ev === 'mode') {
+    if (data) hudMsg({ glide: '¡Ala delta! 🪂', boat: '¡Al agua! 🚤', sub: '¡Inmersión! 🤿' }[data], true);
+    gliderButtons(data === 'glide');
+    if (data === 'glide' && glideHints++ < 3) hint('Ala delta: DERRAPE sube y FRENO baja. ¡Busca los aros!');
+  }
+  else if (ev === 'shortcut') hudMsg('¡Atajo! 🚀', true);
+  else if (ev === 'current') { if (curHints++ < 2) hint(data === 1 ? 'Corriente a favor: ¡síguela para ir más rápido!' : 'Corriente lateral: ¡te empuja hacia un lado!'); }
+  else if (ev === 'out') { if (!data.isPlayer) hint(fill(t('💥 {name} queda fuera · quedan {left}'), data)); sfx.thud?.(0, 0.8); }
+  else if (ev === 'rival') { if (race.rival) hint(fill(t(data ? '⚔️ ¡{name} te ha adelantado!' : '⚔️ ¡Has adelantado a {name}!'), race.rival.char)); }
   else if (ev === 'lap') { hudMsg('Vuelta ' + data, true); sfx.lap(); sfx.crowd?.(0, 0.7); }
   else if (ev === 'finalLap') { hudMsg('¡Última vuelta!', true); sfx.finalLap(); A.setMusicIntensity?.(1); sfx.crowd?.(0, 0.9); }
   else if (ev === 'lightning') { flash(true); setTimeout(() => sfx.thunder?.(), 380); }
   else if (ev === 'flash') { flash(); setTimeout(() => sfx.thunder?.(0, 0.7), 150); }
   else if (ev === 'finish') {
     const good = mode === 'time' || data <= 3;
-    hudMsg(mode === 'time' ? '¡META!' : data === 1 ? '¡1º! 🏆' : '¡META!');
+    hudMsg(race.rules ? (data === 1 ? '¡Victoria! 🏆' : race.player.out ? '¡Eliminado!' : '¡Fin!') : mode === 'time' ? '¡META!' : data === 1 ? '¡1º! 🏆' : '¡META!');
     if (A.playJingle) A.playJingle(good ? 'win' : 'lose'); else if (good) sfx.finish(); else sfx.lose();
     A.haptic?.('finish'); sfx.crowd?.();
     flash(); finishTimer = 3.6;
   }
+}
+// En el ala delta los botones de derrape y freno pasan a subir y bajar
+let gliderOn = false;
+function gliderButtons(on) {
+  if (on === gliderOn) return;
+  gliderOn = on;
+  $('btn-drift').textContent = on ? '▲ SUBIR' : 'DERRAPE'; $('btn-brake').textContent = on ? '▼ BAJAR' : 'FRENO';
 }
 function flash(soft) { const f = $('flash'); f.classList.remove('go', 'soft'); void f.offsetWidth; f.classList.add(soft ? 'soft' : 'go'); }
 
@@ -390,10 +426,11 @@ function drawMinimap() {
   const c = $('minimap').getContext('2d');
   c.clearRect(0, 0, 140, 140); c.drawImage(miniBg, 0, 0);
   for (const r of race.racers) {
+    if (r.out && !r.isPlayer) continue;
     const [x, y] = miniBg.map(r.x, r.z);
-    c.beginPath(); c.arc(x, y, r.isPlayer ? 6 : 4, 0, 7);
-    c.fillStyle = r.isPlayer ? '#ffd21f' : hex(r.char.fur === 0xf2f2f7 ? 0xdddddd : r.char.accColor === 0x111111 ? 0xff7a1a : r.char.accColor);
-    c.fill(); c.lineWidth = 2; c.strokeStyle = '#1a0b3a'; c.stroke();
+    c.beginPath(); c.arc(x, y, r.isPlayer ? 6 : r.isRival ? 5 : 4, 0, 7);
+    c.fillStyle = r.isPlayer ? '#ffd21f' : r.isRival ? '#ff2f4a' : hex(r.char.fur === 0xf2f2f7 ? 0xdddddd : r.char.accColor === 0x111111 ? 0xff7a1a : r.char.accColor);
+    c.fill(); c.lineWidth = 2; c.strokeStyle = r.isRival ? '#fff' : '#1a0b3a'; c.stroke();
   }
 }
 
@@ -417,7 +454,19 @@ function updateHud(dt) {
   setText('hud-item-icon', icon);
   setText('hud-item-count', p.itemCount > 1 ? '×' + p.itemCount : '');
   if (lastHud.has !== has) { lastHud.has = has; $('hud-item').classList.toggle('has', has); }
-  const wrong = p.wrongT > 1.2 && race.state === 'racing';
+  // modos especiales: cuenta atrás de la eliminación o globos y tiempo de la batalla
+  const ru = race.rules;
+  if (ru) {
+    const s = Math.max(0, Math.ceil(ru.timer)), key = s * 8 + (p.balloons || 0) + (p.out ? 4 : 0);
+    if (lastHud.rk !== key) {
+      lastHud.rk = key;
+      $('hud-mode').textContent = ru.kind === 'elim' ? fill(t('⏱ {s} s · quedan {n}'), { s, n: ru.active().length })
+        : ('🎈'.repeat(Math.max(0, p.balloons)) || '💥') + ' · ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    const danger = ru.kind === 'elim' ? ru.danger && race.state === 'racing' : p.balloons === 1;
+    if (lastHud.dg !== danger) { lastHud.dg = danger; $('hud-mode').classList.toggle('danger', danger); }
+  }
+  const wrong = p.wrongT > 1.2 && race.state === 'racing' && mode !== 'battle';
   if (lastHud.wrong !== wrong) { lastHud.wrong = wrong; $('hud-wrong').classList.toggle('hidden', !wrong); }
   const boost = p.boostT > 0;
   if (lastHud.boost !== boost) { lastHud.boost = boost; $('speedfx').classList.toggle('on', boost); }
@@ -451,12 +500,12 @@ function showResults() {
   const extras = []; // desglose del premio: récord, misiones...
   $('r-retry').classList.toggle('hidden', mode === 'cup');
   if (mode === 'time') {
-    const t = race.time, best = save.best[currentTrack.id];
-    record = !best || t < best;
+    const tm = race.time, best = save.best[recKey()];
+    record = !best || tm < best;
     $('r-title').textContent = record ? '¡Nuevo récord!' : 'Contrarreloj';
-    list.innerHTML = `<li class="me"><b>⏱</b><span>Tu tiempo</span><span></span><span>${fmt(t)}</span></li>` +
-      `<li><b>★</b><span>Mejor tiempo</span><span></span><span>${fmt(record ? t : best)}</span></li>`;
-    if (record) { save.best[currentTrack.id] = Math.round(t * 100) / 100; save.ghosts[currentTrack.id] = race.rec; A.playJingle?.('record'); }
+    list.innerHTML = `<li class="me"><b>⏱</b><span>Tu tiempo</span><span></span><span>${fmt(tm)}</span></li>` +
+      `<li><b>★</b><span>Mejor tiempo</span><span></span><span>${fmt(record ? tm : best)}</span></li>`;
+    if (record) { save.best[recKey()] = Math.round(tm * 100) / 100; save.ghosts[recKey()] = race.rec; A.playJingle?.('record'); }
     reward = 20 + me.bananas + (record ? 50 : 0);
     if (record) extras.push('récord +50');
     $('r-next').textContent = 'Menú ▶';
@@ -466,13 +515,24 @@ function showResults() {
       res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels }; });
       sub = `${cupState.cup.name} · Carrera ${cupState.i + 1}/3 · ${currentTrack.name}`;
     }
+    const ru = race.rules;
     for (const r of res) {
-      const li = document.createElement('li'); if (r.isPlayer) li.className = 'me';
+      const li = document.createElement('li'); li.className = (r.isPlayer ? 'me' : '') + (r.isRival ? ' rival' : '') + (r.out ? ' out' : '');
       const extra = mode === 'cup' ? `+${CUP_POINTS[r.pos - 1]} (${cupState.pts[r.char.id]} pts)` : '';
-      li.innerHTML = `<b>${r.pos}º</b><span>${r.name}${r.isPlayer ? ' (tú)' : ''}</span><span>${extra}</span><span>${r.time ? fmt(r.time) : '—'}</span>`;
+      // en los modos especiales no hay tiempos: globos y golpes, o quién ha sobrevivido
+      const last = !ru ? (r.time ? fmt(r.time) : '—') : ru.kind === 'battle' ? ('🎈'.repeat(r.balloons) || '—') + (r.pops ? ' 💥' + r.pops : '') : t(r.out ? 'Eliminado' : 'Sigue en pie');
+      li.innerHTML = `<b>${r.pos}º</b><span>${r.name}${r.isPlayer ? t(' (tú)') : ''}</span><span>${extra}</span><span>${last}</span>`;
       list.appendChild(li);
     }
+    if (mode === 'elim') sub = t('Eliminación') + ' · ' + t(sub); else if (mode === 'battle') sub = t('Batalla de globos');
     reward = Math.round(RACE_REWARD[me.pos - 1] * d.reward) + me.bananas;
+    // rival personal: si acabas por delante sube de nivel (y hay premio); si no, afloja
+    const rv = res.find(r => r.isRival);
+    if (rv) {
+      const won = me.pos < rv.pos, s = save.rival;
+      s.level = Math.max(RIVAL_MIN, Math.min(RIVAL_MAX, (s.level | 0) + (won ? 1 : -1)));
+      if (won) { s.wins = (s.wins | 0) + 1; addStat(save, 'rivalWins'); const b = Math.round(RIVAL_BONUS * d.reward); reward += b; extras.push(fill(t('rival +{b}'), { b })); } else s.losses = (s.losses | 0) + 1;
+    }
     $('r-next').textContent = mode === 'cup' ? (cupState.i < 2 ? 'Siguiente carrera ▶' : 'Ver clasificación ▶') : 'Menú ▶';
   }
   // misiones (se pagan una sola vez, aquí), estadísticas de por vida y logros
@@ -481,6 +541,7 @@ function showResults() {
   if (mr) { reward += mr; extras.push(fill('misiones +{mr}', { mr })); }
   recordRace(save, { mode, pos: me.pos, st: me.st, time: race.time, missions: missions.filter(x => x.done).length, record });
   $('r-sub').textContent = sub;
+  $('r-replay').classList.toggle('hidden', !!race.rules || race.replay.frames.length < 30);
   $('r-reward').textContent = `+${reward} 🍌` + (extras.length ? ` (${extras.join(' · ')})` : '');
   earn(reward); persist(); awardAchievements();
   if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
@@ -518,11 +579,11 @@ function showCupFinal() {
   });
   let bonus = 0;
   if (rank <= 3) {
-    const key = cup.id + '_' + d.id, wasLocked = !cup1Unlocked();
+    const key = cup.id + '_' + d.id, ci = CUPS.indexOf(cup), next = CUPS[ci + 1], wasLocked = next && !cupUnlocked(ci + 1);
     save.trophies[key] = Math.min(save.trophies[key] || 9, rank);
     bonus = Math.round([300, 200, 120][rank - 1] * d.reward);
     earn(bonus); if (rank === 1) addStat(save, 'golds');
-    if (wasLocked && cup.id === 'platano') setTimeout(() => toast('¡Copa Diamante desbloqueada! 💎'), 600);
+    if (wasLocked) setTimeout(() => toast(fill(t('¡{cup} desbloqueada! {icon}'), { cup: t(next.name), icon: next.icon })), 600);
     sfx.buy();
   }
   persist(); awardAchievements();
@@ -530,7 +591,7 @@ function showCupFinal() {
   $('r-sub').textContent = `${cup.name} · ${d.name}`;
   $('r-reward').textContent = bonus ? `Premio: +${bonus} 🍌` : 'Queda entre los 3 primeros para ganar trofeo';
   $('r-next').textContent = 'Menú ▶';
-  $('r-retry').classList.add('hidden');
+  $('r-retry').classList.add('hidden'); $('r-replay').classList.add('hidden');
   cupState.done = true; missions = []; renderMissions($('r-missions'), false);
   startPodium(rows.slice(0, 3).map(r => ({ char: r.ch, ...(cupState.ride[r.id] || {}), isPlayer: r.id === save.char })), rank, rank <= 3);
 }
@@ -561,17 +622,25 @@ function buildDiffSeg(el) {
   });
 }
 
+function segSet(id, cur, on) {
+  $(id).querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === cur); b.onclick = () => { sfx.ui(); on(b.dataset.v); }; });
+}
 function buildTracks() {
-  $('tracks-title').textContent = mode === 'time' ? 'Contrarreloj' : 'Carrera rápida';
-  $('diff-seg').style.visibility = mode === 'time' ? 'hidden' : 'visible';
+  const time = mode === 'time';
+  if (!time) mode = raceKind;
+  $('tracks-title').textContent = time ? 'Contrarreloj' : mode === 'elim' ? 'Eliminación' : 'Carrera rápida';
+  $('diff-seg').style.visibility = time ? 'hidden' : 'visible';
+  $('kind-seg').classList.toggle('hidden', time);
+  segSet('kind-seg', raceKind, v => { raceKind = v; buildTracks(); });
+  segSet('variant-seg', variant, v => { variant = v; buildTracks(); });
   buildDiffSeg($('diff-seg'));
   const box = $('track-cards'); box.innerHTML = '';
-  for (const t of TRACKS) {
+  for (const t of TRACKS) { // (aquí t es el circuito; los textos los traduce el observador de i18n)
     const ok = trackUnlocked(t), c = document.createElement('button');
     c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t);
-    const best = save.best[t.id];
-    c.innerHTML = `${miniSvg(t)}<h3>${ok ? t.name : '🔒 ' + t.name}</h3><p>${ok ? (mode === 'time' ? (best ? '★ ' + fmt(best) : 'Sin tiempo') : CUPS[t.cup].name) : 'Gana un trofeo en la Copa Plátano'}</p>`;
-    c.onclick = () => { if (!ok) { sfx.deny(); toast('Gana un trofeo en la Copa Plátano'); return; } sfx.ui(); startRace(t.id); };
+    const best = save.best[t.id + (variant ? ':' + variant : '')];
+    c.innerHTML = `${miniSvg(t)}<h3>${ok ? t.name : '🔒 ' + t.name}</h3><p>${ok ? (time ? (best ? '★ ' + fmt(best) : 'Sin tiempo') : CUPS[t.cup].name) : lockText(t.cup)}</p>`;
+    c.onclick = () => { if (!ok) { sfx.deny(); toast(lockText(t.cup)); return; } sfx.ui(); startRace(t.id); };
     box.appendChild(c);
   }
 }
@@ -580,13 +649,13 @@ function buildCups() {
   buildDiffSeg($('diff-seg2'));
   const box = $('cup-cards'); box.innerHTML = '';
   CUPS.forEach((cup, i) => {
-    const ok = i === 0 || cup1Unlocked(), c = document.createElement('button');
+    const ok = cupUnlocked(i), c = document.createElement('button');
     const t0 = trackById(cup.tracks[0]), tr = save.trophies[cup.id + '_' + diff().id];
     c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t0); c.style.minHeight = '150px';
     c.innerHTML = `<span class="emoji">${cup.icon}</span><h3>${ok ? cup.name : '🔒 ' + cup.name}</h3>` +
-      `<p>${cup.tracks.map(id => trackById(id).name).join(' · ')}</p><p>${tr ? ['🏆 Oro', '🥈 Plata', '🥉 Bronce'][tr - 1] + ' en ' + diff().name : ok ? '3 carreras · sin trofeo aún' : 'Gana un trofeo en la Copa Plátano'}</p>`;
+      `<p>${cup.tracks.map(id => trackById(id).name).join(' · ')}</p><p>${tr ? ['🏆 Oro', '🥈 Plata', '🥉 Bronce'][tr - 1] + ' en ' + diff().name : ok ? '3 carreras · sin trofeo aún' : lockText(i)}</p>`;
     c.onclick = () => {
-      if (!ok) { sfx.deny(); toast('Gana un trofeo en la Copa Plátano'); return; }
+      if (!ok) { sfx.deny(); toast(lockText(i)); return; }
       sfx.ui(); mode = 'cup'; cupState = { cup, i: 0, pts: {}, ride: {}, rivals: makeLineup(RACERS - 1) }; startRace(cup.tracks[0]);
     };
     box.appendChild(c);
@@ -728,6 +797,10 @@ function buildSettings() {
       };
     });
   };
+  $('set-lang').querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.v === lang());
+    b.onclick = () => { setLang(b.dataset.v); persist(); sfx.ui(); buildSettings(); };
+  });
   seg('set-controls', 'controls');
   seg('set-btnsize', 'btnSize', applyControls);
   // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
@@ -764,7 +837,8 @@ function wireUi() {
   $('tuto-no').onclick = () => { sfx.back(); show('menu'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     sfx.ui(); const g = b.dataset.go;
-    if (g === 'race' || g === 'time') { mode = g; buildTracks(); show('tracks'); }
+    if (g === 'race' || g === 'time') { mode = g === 'time' ? 'time' : raceKind; buildTracks(); show('tracks'); }
+    else if (g === 'battle') { mode = 'battle'; cupState = null; startRace('arena'); }
     else if (g === 'cups') { buildCups(); show('cups'); }
     else if (g === 'garage') { gSel = null; show('garage'); buildGarage(); }
     else if (g === 'settings') { buildSettings(); show('settings'); }
@@ -783,13 +857,29 @@ function wireUi() {
   $('set-btnalpha').oninput = e => { save.settings.btnAlpha = +e.target.value; applyControls(); };
   $('set-btnalpha').onchange = () => persist();
   $('set-reset').onclick = () => {
-    if (confirm('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?')) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); applyControls(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
+    if (confirm(t('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?'))) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); applyControls(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
   };
   $('btn-pause').onclick = () => setPaused(true);
   $('p-resume').onclick = () => setPaused(false);
   $('p-restart').onclick = () => { sfx.ui(); suspendAudio(false); if (mode === 'cup') { cupState.i = 0; cupState.pts = {}; cupState.ride = {}; startRace(cupState.cup.tracks[0]); } else startRace(currentTrack.id); };
   $('p-quit').onclick = () => { sfx.back(); suspendAudio(false); toMenu(); };
   $('r-retry').onclick = () => { sfx.ui(); startRace(currentTrack.id); };
+  $('r-replay').onclick = startReplay;
+  $('replay-skip').onclick = endReplay;
+  $('p-photo').onclick = () => setPhoto(true);
+  $('photo-back').onclick = () => setPhoto(false);
+  $('photo-save').onclick = savePhoto;
+  $('photo-zoom').oninput = e => { ph.d = +e.target.value; };
+  // modo foto: arrastrar para girar la cámara, rueda del ratón para acercar
+  const sp = $('s-photo'); let drag = null;
+  sp.addEventListener('pointerdown', e => { if (e.target.closest('.photo-bar')) return; drag = { x: e.clientX, y: e.clientY }; try { sp.setPointerCapture(e.pointerId); } catch (err) { /* no soportado */ } sp.querySelector('.photo-tip').style.opacity = 0; });
+  sp.addEventListener('pointermove', e => {
+    if (!drag) return;
+    ph.a -= (e.clientX - drag.x) * 0.008; ph.e = Math.max(-0.12, Math.min(1.35, ph.e + (e.clientY - drag.y) * 0.006));
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  for (const ev of ['pointerup', 'pointercancel']) sp.addEventListener(ev, () => { drag = null; });
+  sp.addEventListener('wheel', e => { ph.d = Math.max(4, Math.min(30, ph.d + Math.sign(e.deltaY))); $('photo-zoom').value = ph.d; }, { passive: true });
   $('r-next').onclick = () => {
     sfx.ui();
     if (mode === 'cup' && cupState && !cupState.done) {
@@ -808,6 +898,59 @@ function wireUi() {
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('btn-install').classList.remove('hidden'); });
   $('btn-install').onclick = async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('btn-install').classList.add('hidden'); };
   addEventListener('appinstalled', () => { $('btn-install').classList.add('hidden'); toast('¡Juego instalado! 🦍'); });
+}
+
+// ---------- Repetición ----------
+function startReplay() {
+  if (!race || replaying || race.replay.frames.length < 30) return;
+  sfx.ui(); replaying = true; race.replay.start(); startEngine();
+  $('speedfx').classList.remove('on');
+  show('replay');
+}
+function endReplay() {
+  if (!replaying) return;
+  replaying = false;
+  if (race.replay.playing) race.replay.stop();
+  stopEngine(); race.fov = camera.fov;
+  show('results');
+}
+
+// ---------- Modo foto (desde la pausa) ----------
+function setPhoto(on) {
+  if (!race || on === photo) return;
+  photo = on;
+  if (on) {
+    ph.keep = { pos: camera.position.clone(), quat: camera.quaternion.clone(), fov: camera.fov };
+    ph.a = race.player.h + Math.PI * 0.82; ph.e = 0.22; ph.d = +$('photo-zoom').value;
+    $('s-photo').classList.remove('shot'); $('s-photo').querySelector('.photo-tip').style.opacity = 1;
+    show('photo');
+  } else {
+    const k = ph.keep; camera.position.copy(k.pos); camera.quaternion.copy(k.quat); camera.fov = k.fov; camera.updateProjectionMatrix();
+    race.camPos.copy(camera.position);
+    show('pause', 'hud');
+  }
+}
+function photoCam() {
+  const p = race.player, cy = p.y + p.hopY + p.bob + 1.3, ce = Math.cos(ph.e);
+  camera.position.set(p.x + Math.sin(ph.a) * ce * ph.d, Math.max(p.y + 0.5, cy + Math.sin(ph.e) * ph.d), p.z + Math.cos(ph.a) * ce * ph.d);
+  if (camera.fov !== 50) { camera.fov = 50; camera.updateProjectionMatrix(); }
+  camera.lookAt(p.x, cy, p.z);
+  race.camPos.copy(camera.position);
+}
+// Guarda la imagen del juego como PNG. Donde el navegador no deja descargar (la app de Android),
+// se esconden los botones unos segundos para hacer una captura de pantalla.
+function savePhoto() {
+  const hideUi = () => { const el = $('s-photo'); el.classList.add('shot'); setTimeout(() => el.classList.remove('shot'), 4500); };
+  if (window.Capacitor) { toast('Haz ahora una captura de pantalla 📸'); setTimeout(hideUi, 900); return; }
+  photoCam(); render(raceScene, camera);
+  canvas.toBlob(blob => {
+    if (!blob) { toast('Haz ahora una captura de pantalla 📸'); setTimeout(hideUi, 900); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'gorilla-racing-' + Date.now() + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast('📸 Foto guardada en Descargas');
+  }, 'image/png');
+  flash(true);
 }
 
 function setPaused(on) {
@@ -830,7 +973,20 @@ function frame(now) {
     return;
   }
   if (race) {
-    if (!paused) {
+    if (replaying) {
+      // repetición: los coches siguen lo grabado y la cámara va cambiando de plano
+      const ok = race.replay.update(dt, camera);
+      track.update(dt, race.t, camera.position, race.player);
+      race.lateUpdate(dt, camera);
+      fxAdd.update(dt, ps); fxNorm.update(dt, ps);
+      ambient.points.visible = !race.underwater.on; ambient.update(race.t, camera.position);
+      const p = race.player; updateEngine(Math.min(1.3, Math.abs(p.speed) / p.maxSpeed), p.drifting && p.hopY < 0.1, p.boostT > 0);
+      consumePresses();
+      if (!ok) endReplay();
+    } else if (photo) {
+      if (input.pausePressed) { consumePresses(); setPhoto(false); }
+      else { photoCam(); track.update(0, race.t, camera.position, race.player); race.underwater.update(dt, camera.position); }
+    } else if (!paused) {
       pollInput(dt);
       if (input.pausePressed && !resultsShown) { consumePresses(); setPaused(true); return; }
       race.update(dt, input);
@@ -869,6 +1025,7 @@ function frame(now) {
       animateKart(showKart, dt, 6, Math.sin(tGlobal * 1.3) * 0.5);
       updateShowTrail();
     }
+    if (showroom) showroom.update(tGlobal);
     render(menuScene, menuCam);
   }
 }
@@ -880,6 +1037,7 @@ setVolumes(save.settings.music, save.settings.sfx);
 A.setHaptics?.(save.settings.haptics !== false);
 if (save.settings.controls === 'tilt') enableTilt(true);
 applyControls();
+initI18n();
 refreshShow();
 resize();
 show('title');
@@ -890,4 +1048,5 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, get gfx() { return G; }, autoTick: autoQualityTick, renderer, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, get gfx() { return G; }, autoTick: autoQualityTick, renderer, podium, post, showModel: setShowModel, startRace: (id, m = 'race', v = '') => { mode = m; variant = v; if (m === 'race' || m === 'elim') raceKind = m; startRace(id); }, showResults: () => showResults(),
+  startReplay, endReplay, setPhoto, get replaying() { return replaying; }, get photo() { return photo; }, camera };

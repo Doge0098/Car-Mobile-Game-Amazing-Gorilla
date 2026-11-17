@@ -2,9 +2,12 @@
 import * as THREE from './vendor/three.module.min.js';
 import * as A from './audio.js';
 import { CHARACTERS, KARTS, LAPS, RACERS, charById, kartById, KART_COLORS, rng } from './data.js';
-import { makeGorilla, makeKart, mountGorilla, makeModeRigs, animateGorilla, animateKart, blobShadow, toon, makeHazard } from './models.js';
+import { makeGorilla, makeKart, mountGorilla, makeModeRigs, animateGorilla, animateKart, blobShadow, toon, makeHazard, canvasTex } from './models.js';
 import { addOutline } from './outline.js';
 import { SkidMarks, Trail, Weather, Hazards, Underwater } from './world.js';
+import { tryShortcut, stepFlight, applyCurrents, gliderAlt } from './extras.js';
+import { Rules } from './rules.js';
+import { Replay } from './replay.js';
 
 const sfx = A.sfx;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -15,6 +18,17 @@ const TRICK_T = 0.55, THROW_T = 0.4;
 const FIRE_TRAIL = { color: 0xffa030, sparks: [0xff7a1a, 0xffe45a] };
 const _hue = new THREE.Color();
 const hueHex = h => _hue.setHSL(h - Math.floor(h), 1, 0.56).getHex();
+// cartel flotante que señala al rival personal
+let rivalTex = null;
+function rivalTag() {
+  if (!rivalTex) rivalTex = canvasTex(160, 56, c => {
+    c.fillStyle = '#1a0b3a'; c.fillRect(0, 0, 160, 56); c.fillStyle = '#ff2f4a'; c.fillRect(5, 5, 150, 46);
+    c.fillStyle = '#fff'; c.font = 'italic 900 34px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('RIVAL', 80, 30);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: rivalTex, depthWrite: false, fog: false }));
+  s.scale.set(3.4, 1.2, 1); s.position.y = 4.5;
+  return s;
+}
 
 class Racer {
   constructor(race, slot, char, kart, color, isPlayer) {
@@ -44,6 +58,7 @@ class Racer {
     this.wrongT = 0; this.t = Math.random() * 10; this.bumpCd = 0; this.sizeK = 1;
     this.throwT = 0; this.tauntT = 0; this.angryT = 0; this.lookT = 0; this.lookDir = 0; this.lookCd = 2 + Math.random() * 4; this.lookNow = 0;
     this.mk = [{ on: false, x: 0, y: 0, z: 0 }, { on: false, x: 0, y: 0, z: 0 }];
+    this.out = false; this.flight = null; this.alt = 0; this.inCurrent = 0; this.isRival = false;
     // estadísticas de la carrera (misiones, logros, tutorial)
     this.st = { tricks: 0, rings: 0, miniturbos: 0, items: 0, hitsDealt: 0, hitsTaken: 0, bananas: 0, startBoost: false, pads: 0,
       offT: 0, offMax: 0, offCur: 0, bestPos: slot + 1, overtakes: 0, topSpeed: 0 };
@@ -73,7 +88,7 @@ class Racer {
 
   // by: corredor que provoca el golpe (para contar los golpes dados); sin él es un obstáculo del mapa
   hit(by) {
-    if (this.furyT > 0 || this.spinT > 0) return false;
+    if (this.furyT > 0 || this.spinT > 0 || this.flight || this.out) return false;
     const race = this.race, fx = race.fx;
     if (this.shieldT > 0) {
       this.shieldT = 0;
@@ -88,6 +103,7 @@ class Racer {
     if (this.isPlayer) { sfx.hit(); race.shake = 0.5; A.haptic?.('hit'); } else if (this.near()) sfx.bump();
     if (this.isPlayer || this.near()) race.shock(this.x, this.y + 1.2, this.z, 0xff5a3c, 6);
     race.voice(this, this.shrinkT > 0 ? 'tiny' : 'hit');
+    if (race.rules) race.rules.onHit(this, by);
     return true;
   }
 
@@ -98,6 +114,13 @@ class Racer {
     this.t += dt;
     for (const k of ['boostT', 'shieldT', 'furyT', 'poundT', 'bumpCd', 'shrinkT', 'magnetT', 'stallT', 'rampCd', 'throwT', 'tauntT', 'angryT', 'lookT', 'trickT']) if (this[k] > 0) this[k] = Math.max(0, this[k] - dt);
     this.lookCd -= dt;
+    // vuelo del atajo: el coche va guiado hasta el punto de aterrizaje
+    if (this.flight) {
+      if (stepFlight(this, dt, tr)) { this.slopeF = 0; return; }
+      this.boost(0.9);
+      fx.norm.burst(this.x, this.y + 0.3, this.z, 12, race.dustColor, 7, 12, 0.5, 3);
+      if (this.isPlayer) { sfx.land?.(); A.haptic?.('land'); }
+    }
     const spinning = this.spinT > 0;
     if (spinning) this.spinT -= dt;
     const s0 = tr.samples[this.idx], mode = this.mode, gliding = mode === 'glide';
@@ -111,13 +134,18 @@ class Racer {
     if (this.furyT > 0) max *= 1.16;
     if (this.boostT > 0) max *= 1.36;
     if (this.shrinkT > 0) max *= 0.72;
+    // corrientes de agua: empujan hacia delante o hacia un lado
+    if (tr.currents.length && (mode === 'boat' || mode === 'sub')) {
+      const was = this.inCurrent; max *= applyCurrents(this, tr, dt);
+      if (this.inCurrent && !was && this.isPlayer) { sfx.whoosh?.(0, 0.7); race.emit('current', this.inCurrent); }
+    } else this.inCurrent = 0;
 
     // aceleración
     if (spinning) this.speed -= this.speed * 2.4 * dt;
     else if (this.stallT > 0) this.speed -= this.speed * 1.5 * dt;
     else if (air) { /* en el aire conserva la velocidad */ }
-    else if (ctl.brake) this.speed = Math.max(-13, this.speed - 55 * dt);
-    else if (ctl.accel) {
+    else if (ctl.brake && !gliding) this.speed = Math.max(-13, this.speed - 55 * dt); // en el ala delta, FRENO baja
+    else if (ctl.accel || gliding) {
       if (this.speed < max) this.speed += this.accel * dt * (this.boostT > 0 ? 2.4 : 1) * (1.2 - 0.75 * Math.max(0, this.speed) / max);
     } else this.speed -= this.speed * 0.9 * dt;
     if (this.speed > max) this.speed -= (this.speed - max) * Math.min(1, 2.6 * dt);
@@ -206,13 +234,15 @@ class Racer {
     if (s.zone !== this.mode) race.setMode(this, s.zone);
     if (s.zone === 'glide') {
       const nx = tr.samples[(ni + 1) % N], fr = clamp(((this.x - s.x) * s.tx + (this.z - s.z) * s.tz) / tr.spacing, 0, 1);
-      this.hopY += (s.air + (nx.air - s.air) * fr - this.hopY) * Math.min(1, dt * 12);
-    }
+      // altura del tramo más lo que suba o baje el piloto (DERRAPE sube, FRENO baja)
+      const base = s.air + (nx.air - s.air) * fr;
+      this.hopY += (Math.max(0.3, base + gliderAlt(this, ctl, tr, dt) * clamp(base / 4.5, 0, 1)) - this.hopY) * Math.min(1, dt * 12);
+    } else this.alt = 0;
     // aros de impulso
     for (const rg of tr.rings) {
       if (rg.cd[this.slot] > 0) { rg.cd[this.slot] -= dt; continue; }
       let di = ni - rg.idx; if (di < -N / 2) di += N;
-      if (di >= 0 && di <= 1 && Math.abs(lat - rg.lat) < 3.4) {
+      if (di >= 0 && di <= 1 && Math.abs(lat - rg.lat) < 3.4 && (!rg.air || Math.abs(this.y + this.hopY + 1 - rg.y) < 2.2)) {
         rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++; this.st.rings++; this.st.bananas++;
         fx.add.burst(rg.x, rg.y, rg.z, 22, [0xffd21f, 0xffffff, 0x22e6ff], 12, 9, 0.5);
         race.shock(rg.x, rg.y, rg.z, 0xffffff, 9, 0.4);
@@ -220,8 +250,15 @@ class Racer {
       }
     }
 
-    // rampas
-    if (this.rampCd <= 0 && this.hopY <= 0.01 && this.speed > 18 && !spinning && !s.zone) {
+    // atajo: el trampolín del arcén lanza el coche por encima de la curva
+    if (tr.shortcut && !spinning && tryShortcut(this, tr)) {
+      this.st.shortcuts = (this.st.shortcuts || 0) + 1; this.air = false; this.trickT = TRICK_T; this.trickDir = -tr.shortcut.side;
+      fx.add.burst(this.x, this.y + 0.8, this.z, 18, [0x35e08a, 0xffffff], 10, 9, 0.5);
+      if (this.isPlayer) { sfx.ramp?.(); A.haptic?.('boost'); race.emit('shortcut'); }
+    }
+
+    // rampas (también en el agua: los barcos saltan)
+    if (this.rampCd <= 0 && this.hopY <= 0.01 && this.speed > 18 && !spinning && !this.flight && (!s.zone || s.zone === 'boat')) {
       for (const rp of tr.ramps) {
         let di = ni - rp.idx; if (di < -N / 2) di += N;
         if (di >= 0 && di <= 2 && Math.abs(lat) < tr.hw - 0.4) {
@@ -270,7 +307,7 @@ class Racer {
       if (!b.active) continue;
       const dx = this.x - b.x, dz = this.z - b.z;
       if (dx * dx + dz * dz < 6.5 && this.hopY < 2.4) {
-        b.active = false; b.timer = 3.5; b.mesh.visible = false;
+        b.active = false; b.timer = race.boxRespawn || 3.5; b.mesh.visible = false;
         fx.add.burst(b.x, b.y + 1.5, b.z, 22, [0xff4fd8, 0xffd21f, 0x22e6ff, 0xffffff], 10, 8, 0.5, 8);
         if (!this.item && this.rolling <= 0 && !this.finished && (this.isPlayer || race.aiItems !== false)) { this.rolling = 1.3; }
         if (this.isPlayer || this.near()) race.shock(b.x, b.y + 1.5, b.z, 0xffe45a, 4.5);
@@ -380,6 +417,10 @@ class Racer {
         if (Math.random() < 0.4) fx.norm.emit(px, y + 0.3, pz, (Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2, 0xffffff, 9, 0.5, 0, 1.5);
       }
     }
+    if (this.inCurrent && Math.random() < 0.7) {
+      const [px, pz] = rear((Math.random() - 0.5) * 2, 2.4);
+      fx.norm.emit(px, y + this.bob + 0.6, pz, -f[0] * 6, 1.5 + Math.random() * 2, -f[1] * 6, 0xdff8ff, 6 + Math.random() * 5, 0.6, -1);
+    }
     if (this.boostT > 0) {
       for (const sd of [-0.4, 0.4]) {
         const [px, pz] = rear(sd, 2.3);
@@ -444,6 +485,13 @@ export class Race {
       }
     }
     this.player = this.racers[total - 1];
+    this.live = this.racers; // corredores que siguen en juego (los modos con eliminación van quitando)
+    // rival personal: opts.rivalDef = { char, level }; se adapta al nivel del jugador
+    this.rival = null; this.rivalAhead = null;
+    if (this.rivalDef && !solo) {
+      const rv = this.racers.find(r => !r.isPlayer && r.char.id === this.rivalDef.char);
+      if (rv) { rv.isRival = true; rv.skill = clamp(0.006 + this.rivalDef.level * 0.011, -0.03, 0.075); this.rival = rv; this.rivalTag = rivalTag(); rv.root.add(this.rivalTag); }
+    }
     const wOpts = { scene: this.scene, track: tr, fx: this.fx, quality: this.quality, B: k => (this.bloom ? k : 1), shadows: this.shadows, rand: rng(def.seed * 7 + 5), onEvent: (e, d) => this.emit(e, d) };
     // en contrarreloj no hay obstáculos ni meteoritos: la vuelta debe depender solo del piloto
     this.hazards = new Hazards(solo || this.noHazards ? null : ex.hazard, wOpts);
@@ -462,6 +510,10 @@ export class Race {
       }
     }
     this.camH = this.player.h; this.camY = this.player.y;
+    // en los mapas que empiezan en el agua los coches salen ya transformados
+    for (const r of this.racers) { const z = tr.samples[r.idx].zone; if (z && z !== 'glide') this.setMode(r, z, true); }
+    this.rules = this.mode === 'elim' || this.mode === 'battle' ? new Rules(this) : null;
+    this.replay = new Replay(this); this.replaying = false;
     this.ranking();
     for (const r of this.racers) r.prevPos = r.pos;
   }
@@ -479,8 +531,9 @@ export class Race {
   }
 
   // Transformación del coche al entrar o salir de un tramo especial
-  setMode(r, mode) {
-    const prev = r.mode; r.mode = mode || null; r.modeT = 0;
+  // silent: sin efectos (al colocar la parrilla). En la repetición se ven los efectos pero no suenan.
+  setMode(r, mode, silent) {
+    const prev = r.mode, mute = this.replaying; r.mode = mode || null; r.modeT = 0; r.alt = 0;
     r.rigs.glider.visible = mode === 'glide'; r.rigs.boat.visible = mode === 'boat'; r.rigs.sub.visible = mode === 'sub';
     for (const w of r.kart.userData.wheels) {
       const sg = Math.sign(w.x);
@@ -488,20 +541,22 @@ export class Race {
       w.pivot.rotation.z = mode === 'boat' ? -sg * Math.PI / 2 : 0;
       w.pivot.position.set(mode === 'boat' ? w.x - sg * 0.1 : w.x, mode === 'boat' ? w.y + 0.75 : w.y, w.pivot.position.z);
     }
-    if (prev === 'glide' && !mode) { r.hopY = 0; this.fx.norm.burst(r.x, r.y + 0.3, r.z, 12, this.dustColor, 7, 12, 0.5, 3); if (r.isPlayer) { sfx.land?.(); A.haptic?.('land'); } }
     r.drifting = false; r.charge = 0;
-    const near = r.isPlayer || r.near();
+    if (silent) { r.modeT = 1; return; }
+    if (prev === 'glide' && !mode) { r.hopY = 0; this.fx.norm.burst(r.x, r.y + 0.3, r.z, 12, this.dustColor, 7, 12, 0.5, 3); if (r.isPlayer && !mute) { sfx.land?.(); A.haptic?.('land'); } }
+    const near = !mute && (r.isPlayer || r.near());
     this.fx.add.burst(r.x, r.y + r.hopY + 1.2, r.z, 20, [0xffffff, 0x22e6ff, 0xffd21f], 10, 9, 0.45);
     if (mode === 'boat' || mode === 'sub' || prev === 'boat' || prev === 'sub') {
       this.fx.norm.burst(r.x, r.y + 0.4, r.z, 18, 0xffffff, 9, 10, 0.7, 14);
       if (near) sfx.splash?.(r.isPlayer ? 0 : this.panOf(r.x, r.z), r.isPlayer ? 1 : 0.5);
     } else if (mode === 'glide' && near) sfx.whoosh?.(r.isPlayer ? 0 : this.panOf(r.x, r.z), r.isPlayer ? 1 : 0.5);
-    if (r.isPlayer && mode) this.emit('mode', mode);
+    if (r.isPlayer && !mute) this.emit('mode', mode || null);
   }
 
   panOf(x, z) { return clamp(((x - this.camPos.x) * -Math.cos(this.camH) + (z - this.camPos.z) * Math.sin(this.camH)) / 18, -1, 1); }
 
   ranking() {
+    if (this.rules) return this.rules.rank();
     const arr = this.racers.slice().sort((a, b) => {
       if (a.finished !== b.finished) return a.finished ? -1 : 1;
       if (a.finished) return a.finishTime - b.finishTime;
@@ -512,6 +567,7 @@ export class Race {
   }
 
   rollItem(r) {
+    if (this.rules) { const key = this.rules.rollItem(r); if (key) return key; }
     const n = this.racers.length, k = n > 1 ? (r.pos - 1) / (n - 1) : 0, first = r.pos === 1;
     const w = {
       turbo: 2 + 3 * k, coco: first ? 0.3 : 2 + 2 * k, peel: 4 - 3.2 * k, shield: 3 - 1.8 * k, drum: first ? 0.4 : 1 + 1.5 * k,
@@ -544,7 +600,9 @@ export class Race {
       r.throwT = THROW_T; if (loud) sfx.drop(pan, vol);
     } else if (it === 'coco') {
       const m = new THREE.Mesh(this.cocoGeo, this.cocoMat); m.castShadow = !!this.shadows; addOutline(m); this.scene.add(m);
-      const ahead = this.racers.filter(o => o !== r && !o.finished && o.prog > r.prog).sort((a, b) => a.prog - b.prog)[0] || null;
+      // objetivo: el coche más cercano por delante (en los modos sin vueltas, por posición en el circuito)
+      const N = tr.N, gap = o => (this.rules ? ((o.idx - r.idx) % N + N) % N : o.prog - r.prog);
+      const ahead = this.live.filter(o => o !== r && !o.finished && gap(o) > 0).sort((a, b) => gap(a) - gap(b))[0] || null;
       this.cocos.push({ prog: r.prog + 2, lat: r.lat, owner: r, target: ahead, life: 5.5, mesh: m });
       r.throwT = THROW_T; if (loud) sfx.throw(pan, vol); this.voice(r, 'grunt');
     } else if (it === 'barrel') {
@@ -557,11 +615,11 @@ export class Race {
       const m = new THREE.Mesh(this.waveGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff7a3c).multiplyScalar(this.glowK), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
       m.rotation.x = -Math.PI / 2; m.position.set(r.x, r.y + 0.4, r.z); this.scene.add(m);
       this.waves.push({ mesh: m, t: 0 });
-      for (const o of this.racers) if (o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 30 * 30) o.hit(r);
+      for (const o of this.live) if (o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 30 * 30) o.hit(r);
       if (loud) this.shake = Math.max(this.shake, 0.35);
     } else if (it === 'bolt') {
       sfx.zap?.(0, loud ? 1 : 0.7); this.emit('flash');
-      for (const o of this.racers) {
+      for (const o of this.live) {
         if (o === r || o.finished || o.furyT > 0) continue;
         // rayo en zigzag desde el cielo (varios trazos para que se vea grueso)
         const pts = [], zig = [];
@@ -586,7 +644,7 @@ export class Race {
     if (this.hornCd > 0 || r.spinT > 0) return;
     this.hornCd = 0.5; sfx.horn?.(this.playerHorn);
     r.tauntT = Math.max(r.tauntT, 0.45);
-    for (const o of this.racers) {
+    for (const o of this.live) {
       const dp = o.prog - r.prog;
       if (o !== r && dp > 0 && dp < 9 && o.spinT <= 0) { o.lookT = 0.85; o.lookDir = r.lat >= o.lat ? 1 : -1; o.lookCd = 3; }
     }
@@ -599,7 +657,7 @@ export class Race {
     let lane = r.lane + Math.sin(this.t * 0.25 + r.ph) * 1.6;
     const s0 = S[r.idx], fwx = Math.sin(r.h), fwz = Math.cos(r.h);
     // esquivar al coche de delante
-    for (const o of this.racers) {
+    for (const o of this.live) {
       if (o === r) continue;
       const dp = o.prog - r.prog;
       if (dp > 0 && dp < 5 && Math.abs(o.lat - r.lat) < 2.6) lane += (r.lat >= o.lat ? 3.2 : -3.2);
@@ -616,7 +674,13 @@ export class Race {
     for (const h of this.hazards.list) if (h.harm) dodge(h.x, h.z, 3);
     const sA = S[(r.idx + look) % N], room = Math.min(tr.hw, sA.lim) - 1.6;
     lane = clamp(lane, -room, room);
-    const tx = sA.x + sA.nx * lane, tz = sA.z + sA.nz * lane;
+    let tx = sA.x + sA.nx * lane, tz = sA.z + sA.nz * lane;
+    // algunos rivales se desvían hacia el trampolín del atajo (más a menudo en difícil)
+    const sc = tr.shortcut;
+    if (sc && !r.isPlayer && !r.mode && !r.flight) {
+      let di = sc.i0 - r.idx; if (di < -N / 2) di += N;
+      if (di > 0 && di < 18 && (((Math.floor(r.prog / N) * 7 + r.slot * 3) % 5) + 5) % 5 < (this.difficulty.ai > 0.95 ? 2 : 1)) { tx = sc.ex; tz = sc.ez; }
+    }
     const diff = wrapA(Math.atan2(tx - r.x, tz - r.z) - r.h);
     let cm = 0;
     for (let k = 2; k < 16; k += 3) cm = Math.max(cm, Math.abs(S[(r.idx + k) % N].curv));
@@ -624,7 +688,7 @@ export class Race {
     // goma elástica respecto al jugador
     const p = this.player;
     let band = 0;
-    if (!r.isPlayer) band = clamp((p.prog - r.prog) * tr.spacing / 420, -0.08, 0.05);
+    if (!r.isPlayer) band = clamp((p.prog - r.prog) * tr.spacing / 420, r.isRival ? -0.065 : -0.08, r.isRival ? 0.075 : 0.05); // el rival personal no se queda atrás
     const maxK = r.isPlayer ? 0.9 : this.difficulty.ai + r.skill + band;
     // truco en los saltos
     let trick = false;
@@ -634,10 +698,13 @@ export class Race {
       r.useDelay -= dt;
       if (r.useDelay <= 0) {
         let ok = true;
-        if (r.item === 'coco' || r.item === 'bolt') ok = r.pos > 1;
-        if (r.item === 'drum') ok = this.racers.some(o => o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 24 * 24);
-        if (r.item === 'peel') ok = this.racers.some(o => o !== r && o.prog < r.prog && r.prog - o.prog < 14);
-        if (r.item === 'barrel') ok = this.racers.some(o => o !== r && o.prog > r.prog && o.prog - r.prog < 45);
+        const L = this.live;
+        if (r.item === 'drum') ok = L.some(o => o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 24 * 24);
+        else if (!this.rules) { // en la batalla y la eliminación se usa todo en cuanto se puede
+          if (r.item === 'coco' || r.item === 'bolt') ok = r.pos > 1;
+          if (r.item === 'peel') ok = L.some(o => o !== r && o.prog < r.prog && r.prog - o.prog < 14);
+          if (r.item === 'barrel') ok = L.some(o => o !== r && o.prog > r.prog && o.prog - r.prog < 45);
+        }
         if (ok || r.useDelay < -6) this.useItem(r);
       }
     }
@@ -660,7 +727,8 @@ export class Race {
     const order = this.ranking(), extra = this.state === 'finished' ? this.stateT : 0;
     return order.map((r, i) => ({
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
-      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
+      time: this.rules ? 0 : r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
+      out: !!r.out, balloons: r.balloons || 0, pops: r.pops || 0, isRival: r.isRival,
     }));
   }
 
@@ -694,7 +762,7 @@ export class Race {
 
     const moving = this.state === 'racing' || this.state === 'finished';
     const lapBefore = Math.floor(p.prog / N);
-    for (const r of this.racers) {
+    for (const r of this.live) {
       let ctl;
       if (!moving) ctl = null;
       else if (r.isPlayer && !r.finished) {
@@ -705,7 +773,7 @@ export class Race {
       if (!ctl) { r.speed = 0; r.vx = r.vz = 0; r.t += dt; } else r.step(dt, ctl);
     }
     this.prevDrift = input.drift;
-    if (this.state === 'racing') {
+    if (this.state === 'racing' && !this.rules) {
       const lapNow = Math.floor(p.prog / N);
       if (lapNow > lapBefore && lapNow > (p.maxLap || 0) && lapNow < this.laps) {
         p.maxLap = lapNow; this.emit(lapNow === this.laps - 1 ? 'finalLap' : 'lap', lapNow + 1);
@@ -713,8 +781,10 @@ export class Race {
     }
 
     // choques entre coches
-    if (moving) for (let i = 0; i < this.racers.length; i++) for (let j = i + 1; j < this.racers.length; j++) {
-      const a = this.racers[i], b = this.racers[j];
+    const L = this.live;
+    if (moving) for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) {
+      const a = L[i], b = L[j];
+      if (a.flight || b.flight) continue;
       let dx = b.x - a.x, dz = b.z - a.z; const d2 = dx * dx + dz * dz, min = 2.5 * (a.sizeK + b.sizeK) / 2;
       if (d2 < min * min && d2 > 0.0001 && Math.abs(a.hopY - b.hopY) < 1.8) {
         const d = Math.sqrt(d2), push = (min - d) / 2; dx /= d; dz /= d;
@@ -730,7 +800,7 @@ export class Race {
     // cáscaras
     for (let i = this.peels.length - 1; i >= 0; i--) {
       const pe = this.peels[i]; pe.age += dt; pe.mesh.rotation.y += dt * 2;
-      for (const r of this.racers) {
+      for (const r of L) {
         if (r === pe.owner && pe.age < 0.8) continue;
         if ((r.x - pe.x) ** 2 + (r.z - pe.z) ** 2 < 4.4 && r.hopY < 1) {
           r.hit(pe.owner); this.scene.remove(pe.mesh); this.peels.splice(i, 1); break;
@@ -746,13 +816,13 @@ export class Race {
     for (let i = this.cocos.length - 1; i >= 0; i--) {
       const c = this.cocos[i]; c.life -= dt;
       c.prog += 105 / tr.spacing * dt;
-      if (c.target && !c.target.finished && c.target.prog > c.prog - 2) c.lat += (c.target.lat - c.lat) * Math.min(1, dt * 4);
+      if (c.target && !c.target.finished && (this.rules ? !c.target.out : c.target.prog > c.prog - 2)) c.lat += (c.target.lat - c.lat) * Math.min(1, dt * 4);
       c.lat = clamp(c.lat, -tr.hw, tr.hw);
       posOn(c.prog, c.lat, q);
       c.mesh.position.set(q.x, q.y + 1.1 + Math.abs(Math.sin(this.t * 9)) * 0.5, q.z); c.mesh.rotation.x += dt * 12;
       this.fx.add.emit(q.x, q.y + 1.1, q.z, 0, 1, 0, 0xffb060, 7, 0.3);
       let dead = c.life <= 0;
-      for (const r of this.racers) {
+      for (const r of L) {
         if (r === c.owner) continue;
         if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 7.5 && r.hopY < 2.5) { r.hit(c.owner); dead = true; break; }
       }
@@ -770,7 +840,7 @@ export class Race {
       }
       b.holder.position.set(q.x, q.y + 0.92, q.z); b.holder.rotation.y = q.s.h; b.mesh.rotation.x += dt * 9;
       let dead = b.age > 7;
-      for (const r of this.racers) {
+      for (const r of L) {
         if (r === b.owner && b.age < 1) continue;
         if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 6.5 && r.hopY < 2) { r.hit(b.owner); dead = true; break; }
       }
@@ -791,7 +861,7 @@ export class Race {
       if (b.t >= 0.35) { this.scene.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose(); this.bolts.splice(i, 1); }
     }
     // imán: los plátanos vuelan hacia el coche
-    for (const r of this.racers) {
+    for (const r of L) {
       if (r.magnetT <= 0) continue;
       for (const b of tr.bananas) {
         if (!b.active) continue;
@@ -801,10 +871,11 @@ export class Race {
     }
 
     if (moving) this.hazards.update(dt, this.t, this);
+    if (this.rules) this.rules.update(dt);
 
     // adelantamientos: burla del que pasa y enfado del adelantado
     this.ranking();
-    for (const r of this.racers) {
+    for (const r of this.live) {
       if (this.state === 'racing' && this.time > 4 && r.pos !== r.prevPos) {
         if (r.pos < r.prevPos) { r.tauntT = 1.1; r.st.overtakes++; this.voice(r, 'laugh'); if (r.isPlayer) sfx.whoosh?.(); }
         else { r.angryT = 1.3; if (r.isPlayer) sfx.whoosh?.(0, 0.6); }
@@ -813,7 +884,7 @@ export class Race {
       if (this.state === 'racing' && r.pos < r.st.bestPos) r.st.bestPos = r.pos;
       // mira hacia atrás si le pisan los talones
       if (moving && r.lookCd <= 0 && r.spinT <= 0) {
-        for (const o of this.racers) {
+        for (const o of this.live) {
           const dp = r.prog - o.prog;
           if (o !== r && dp > 1.2 && dp < 6) { r.lookT = 0.85; r.lookDir = o.lat >= r.lat ? 1 : -1; r.lookCd = 3.5 + Math.random() * 4; break; }
         }
@@ -838,7 +909,15 @@ export class Race {
       } else if (this.state === 'racing') this.ghost.visible = false;
     }
 
-    for (const r of this.racers) r.visuals(dt, this.t);
+    // rival personal: avisa cuando adelanta al jugador o cuando el jugador le pasa
+    if (this.rival && this.state === 'racing' && !this.rival.out) {
+      const ahead = this.rival.pos < p.pos;
+      if (this.rivalAhead !== null && ahead !== this.rivalAhead && this.time > 6) { this.emit('rival', ahead); if (ahead) this.voice(this.rival, 'laugh'); }
+      this.rivalAhead = ahead;
+      if (this.rivalTag) this.rivalTag.position.y = 4.5 + Math.sin(this.t * 4) * 0.15 + this.rival.hopY;
+    }
+    if (this.state === 'racing' || (this.state === 'finished' && this.stateT < 2.5)) this.replay.record(dt);
+    for (const r of this.live) r.visuals(dt, this.t);
   }
 
   // tras mover la cámara: clima y marcas
@@ -871,7 +950,7 @@ export class Race {
   rivalAudio(out) {
     const p = this.player;
     let n = 0;
-    for (const r of this.racers) {
+    for (const r of this.live) {
       if (r === p || n >= 3) continue;
       const d = Math.hypot(r.x - p.x, r.z - p.z); if (d > 48) continue;
       const o = out[n++]; o.pan = this.panOf(r.x, r.z); o.gain = (1 - d / 48) ** 2; o.pitch = clamp(r.speed / r.maxSpeed, 0, 1.3);
@@ -919,6 +998,7 @@ export class Race {
   dispose() {
     this.hazards.dispose(); this.weather.dispose(); this.marks.dispose();
     for (const r of this.racers) r.trail.dispose();
+    if (this.rivalTag) this.rivalTag.material.dispose();
     for (const b of this.bolts) { b.line.geometry.dispose(); b.line.material.dispose(); }
     this.shieldGeo.dispose(); this.shieldMat.dispose(); this.peelGeo.dispose(); this.cocoGeo.dispose(); this.waveGeo.dispose();
   }

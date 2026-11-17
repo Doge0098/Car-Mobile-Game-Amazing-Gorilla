@@ -33,8 +33,9 @@ export class Rules {
   knockOut(r) {
     if (r.out) return;
     const race = this.race;
-    r.out = true; r.speed = 0; r.vx = r.vz = 0; r.root.visible = false; r.trail.mesh.visible = false;
+    r.out = true; r.speed = 0; r.vx = r.vz = 0; r.root.visible = r.isPlayer; r.trail.mesh.visible = r.isPlayer;
     this.outOrder.push(r);
+    race.live = race.racers.filter(x => !x.out || x.isPlayer); // el jugador eliminado sigue rodando, ya sin contar
     race.fx.norm.burst(r.x, r.y + 1.2, r.z, 30, [0xffffff, 0xdddddd, 0x9aa0b0], 12, 16, 0.9, 4);
     race.fx.add.burst(r.x, r.y + 1.5, r.z, 20, [0xffd21f, 0xff5a3c], 10, 9, 0.6, 10);
     if (r.isPlayer || r.near()) A.sfx.pop?.(r.isPlayer ? 0 : race.panOf(r.x, r.z), 1);

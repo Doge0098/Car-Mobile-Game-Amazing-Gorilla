@@ -28,12 +28,18 @@ export class Replay {
   start() {
     const race = this.race;
     this.playing = true; this.t = 0; this.cut = -1; race.replaying = true; race.state = 'replay';
+    this.keep = race.racers.map(r => ({ finished: r.finished, prog: r.prog, idx: r.idx, x: r.x, z: r.z, h: r.h, y: r.y }));
+    if (race.ghost) race.ghost.visible = false;
     for (const r of race.racers) { r.finished = false; r.spinT = 0; r.boostT = 0; r.poundT = 0; r.tauntT = 0; r.lookT = 0; r.trickT = 0; r.root.visible = true; r.trail.reset(r.x, r.y, r.z); }
   }
 
   stop() {
     const race = this.race; this.playing = false; race.replaying = false; race.state = 'finished';
-    for (const r of race.racers) { r.finished = true; if (r.mode) race.setMode(r, null); }
+    race.racers.forEach((r, i) => {
+      const k = this.keep[i]; Object.assign(r, k); r.hopY = 0; r.speed = 0; r.vx = r.vz = 0; r.spinT = 0; r.boostT = 0; r.drifting = false; r.charge = 0;
+      const z = race.track.samples[r.idx].zone; if (z !== r.mode) race.setMode(r, z === 'glide' ? null : z, true);
+      r.root.visible = !r.out || r.isPlayer; r.trail.reset(r.x, r.y, r.z);
+    });
   }
 
   // Devuelve false cuando la repetición termina
