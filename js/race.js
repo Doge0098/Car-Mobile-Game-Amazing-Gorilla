@@ -272,7 +272,7 @@ class Racer {
       if (dx * dx + dz * dz < 6.5 && this.hopY < 2.4) {
         b.active = false; b.timer = 3.5; b.mesh.visible = false;
         fx.add.burst(b.x, b.y + 1.5, b.z, 22, [0xff4fd8, 0xffd21f, 0x22e6ff, 0xffffff], 10, 8, 0.5, 8);
-        if (!this.item && this.rolling <= 0 && !this.finished) { this.rolling = 1.3; }
+        if (!this.item && this.rolling <= 0 && !this.finished && (this.isPlayer || race.aiItems !== false)) { this.rolling = 1.3; }
         if (this.isPlayer || this.near()) race.shock(b.x, b.y + 1.5, b.z, 0xffe45a, 4.5);
         if (this.isPlayer) sfx.tick();
       }
@@ -405,7 +405,10 @@ class Racer {
 
 export class Race {
   constructor(opts) {
-    Object.assign(this, opts); // scene, track, fx:{add,norm}, mode, difficulty, laps, quality, bloom, shadows, onEvent...
+    // opts: scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent, playerChar/Kart/Color...
+    //  opcionales: laps · rivals [{ char, kart, color }] · playerTune { maxSpeed, accel, turnRate, grip, boostK } (se suman al jugador)
+    //  playerHat · playerWheel · playerTrail { color, sparks, rainbow } · playerHorn · aiItems: false (los rivales no cogen objetos) · noHazards
+    Object.assign(this, opts);
     this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
@@ -443,7 +446,7 @@ export class Race {
     this.player = this.racers[total - 1];
     const wOpts = { scene: this.scene, track: tr, fx: this.fx, quality: this.quality, B: k => (this.bloom ? k : 1), shadows: this.shadows, rand: rng(def.seed * 7 + 5), onEvent: (e, d) => this.emit(e, d) };
     // en contrarreloj no hay obstáculos ni meteoritos: la vuelta debe depender solo del piloto
-    this.hazards = new Hazards(solo ? null : ex.hazard, wOpts);
+    this.hazards = new Hazards(solo || this.noHazards ? null : ex.hazard, wOpts);
     this.weather = new Weather(solo && ex.weather === 'ash' ? 'none' : ex.weather, wOpts);
     this.underwater = new Underwater(wOpts);
     if (solo) {

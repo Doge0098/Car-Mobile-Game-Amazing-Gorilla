@@ -5,7 +5,8 @@
 export const TUTORIAL = {
   track: 'selva', laps: 1, rivals: 2, reward: 50,
   difficulty: { id: 'tutorial', name: 'Tutorial', ai: 0.7, reward: 0 },
-  tune: { maxSpeed: -9 }, // el jugador va algo más despacio para que dé tiempo a leer
+  tune: { maxSpeed: -9 },            // el jugador va algo más despacio para que dé tiempo a leer
+  aiItems: false, noHazards: true,   // carrera tranquila: los rivales no usan objetos y no hay obstáculos
 };
 
 // Lección: { id, text, hl, start(c), done(c), max, ok, label, learned(c), urgent, tries, stage(c) }

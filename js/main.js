@@ -187,12 +187,13 @@ const mctx = { st: null, pos: 0, total: 0, time: 0, par: 0, finished: false, sta
 const rivalBuf = [{ pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }], rivalOut = [];
 
 // Reglas propias de cada modo; lo que no aparece usa los valores normales. Los modos nuevos se añaden aquí.
-//  laps · rivals (número de rivales) · difficulty · tune (ajustes del jugador en lugar de sus mejoras) · podium (escena de podio al acabar)
+//  laps · rivals (número de rivales) · difficulty · tune (ajustes del jugador en lugar de sus mejoras)
+//  aiItems: false (los rivales no cogen objetos) · noHazards (sin obstáculos) · podium (escena de podio al acabar)
 const MODE_RULES = {
   race: { podium: true },
   cup: {},
   time: {},
-  tutorial: { laps: TUTORIAL.laps, rivals: TUTORIAL.rivals, difficulty: TUTORIAL.difficulty, tune: TUTORIAL.tune },
+  tutorial: TUTORIAL,
 };
 const rules = () => MODE_RULES[mode] || {};
 let tuto = null, tutoRev = -1; // tutorial en curso
@@ -245,7 +246,7 @@ function startRace(trackId) {
       scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: R.difficulty || diff(), laps: R.laps, ...gfx,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
       playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
-      rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1),
+      rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
       ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; frameAvg = 1 / 60; lowT = 0; stepGap = 2;
