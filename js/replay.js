@@ -1,6 +1,6 @@
 // Repetición de la carrera: graba la posición de todos los coches y la reproduce con cámaras de cine.
-// También graba los objetos lanzados (cáscaras, cocos y barriles), las ondas del golpe de pecho y los rayos, y en los
-// modos especiales los eliminados y los globos: así en la repetición se ve por qué pasa cada cosa.
+// También graba los objetos lanzados (cáscaras, cocos y barriles), las ondas del golpe de pecho, los rayos y los obstáculos
+// derribados, y en los modos especiales los eliminados y los globos: así en la repetición se ve por qué pasa cada cosa.
 import * as THREE from './vendor/three.module.min.js';
 import { makeHazard } from './models.js';
 import { addOutline } from './outline.js';
@@ -24,7 +24,8 @@ export class Replay {
     this.cut = -1; this.camFix = { x: 0, y: 0, z: 0 }; this.fov = 50;
     // objetos: una pista por objeto { k: tipo, f0: primera muestra, last: última, n: muestras guardadas, d: posiciones }
     this.items = []; this.alive = new Map(); this.itemN = 0;
-    this.events = []; this.seen = new WeakSet(); // ondas y rayos: instante, tipo (0 onda, 1 rayo), x, y, z
+    this.events = []; this.seen = new WeakSet(); // sucesos: instante, tipo (0 onda, 1 rayo, 2 obstáculo derribado), x, y, z (o nº de obstáculo)
+    this.t0 = 0; this.hzDown = []; this.noRacers = { player: race.player, racers: [] }; // reloj de la carrera en la primera muestra y obstáculos caídos
     this.pool = [[], [], []]; this.used = [0, 0, 0]; this.wavePool = []; this.boltPool = []; // copias que se ven en la repetición
   }
 
@@ -41,6 +42,7 @@ export class Replay {
       f[o + 5] = r.steer; f[o + 6] = r.speed; f[o + 7] = r.y;
     });
     this.frames.push(f);
+    if (this.frames.length === 1) this.t0 = this.race.t;
     this.recordItems(this.frames.length - 1);
   }
 
@@ -66,6 +68,13 @@ export class Replay {
       const a = b.line.geometry.attributes.position; let m = 0;
       for (let i = 1; i < a.count; i++) if (a.getY(i) < a.getY(m)) m = i;
       E.push(t - b.t, 1, a.getX(m), a.getY(m), a.getZ(m));
+    }
+    // obstáculos del mapa: se mueven según el reloj de la carrera, así que basta apuntar cuándo derriban uno
+    const hz = race.hazards.list;
+    for (let i = 0; i < hz.length; i++) {
+      const down = hz[i].down > 0;
+      if (down && !this.hzDown[i] && E.length < EVENT_MAX * 5) E.push(t - STEP / 2, 2, i, 0, 0);
+      this.hzDown[i] = down;
     }
   }
 
@@ -115,6 +124,9 @@ export class Replay {
     for (const s of race.shocks) hide(s.mesh);
     const gh = race.ghost;
     if (gh) { this.ghostKeep = { v: gh.visible, x: gh.position.x, y: gh.position.y, z: gh.position.z, h: gh.rotation.y }; gh.visible = false; this.gIdx = race.ghostData ? tr.locate(race.ghostData[0], race.ghostData[1], 0, tr.N) : 0; }
+    // los obstáculos vuelven a estar todos en pie
+    this.hzKeep = race.hazards.list.map(h => ({ down: h.down, harm: h.harm, was: h.was }));
+    for (const h of race.hazards.list) h.down = 0;
     this.wasOut = new Uint8Array(this.n);
     race.racers.forEach((r, i) => {
       const o = i * F, fl = f0[o + 4] | 0, mode = MODES[(fl >> 8) & 3];
@@ -139,6 +151,7 @@ export class Replay {
       r.trail.reset(r.x, r.y, r.z); r.trail.mesh.visible = false; // la estela vuelve sola en cuanto el coche la necesite
     });
     for (let i = 0; i < this.hid.length; i += 2) this.hid[i].visible = this.hid[i + 1];
+    race.hazards.list.forEach((h, i) => Object.assign(h, this.hzKeep[i])); // se recolocan solos en cuanto sigue la carrera
     const gh = race.ghost, gk = this.ghostKeep;
     if (gh && gk) { gh.visible = gk.v; gh.position.set(gk.x, gk.y, gk.z); gh.rotation.y = gk.h; }
     // fuera las copias de la repetición
@@ -146,7 +159,7 @@ export class Replay {
     for (const m of this.wavePool) { race.scene.remove(m); m.material.dispose(); }
     for (const l of this.boltPool) { race.scene.remove(l); l.geometry.dispose(); l.material.dispose(); }
     this.wavePool.length = 0; this.boltPool.length = 0;
-    this.keep = this.hid = this.ghostKeep = null;
+    this.keep = this.hid = this.ghostKeep = this.hzKeep = null;
   }
 
   // Copia de un objeto para la repetición (se reutilizan mientras dura)
@@ -189,12 +202,13 @@ export class Replay {
     this.pfi = fi;
   }
 
-  // Ondas del golpe de pecho y rayos activos en este instante
+  // Ondas del golpe de pecho y rayos activos en este instante, y obstáculos que caen justo ahora
   playEvents(dt) {
     const race = this.race, E = this.events, t = this.t; let nw = 0, nb = 0;
     while (this.ev0 < E.length && E[this.ev0] + 0.8 < t) this.ev0 += 5;
     for (let i = this.ev0; i < E.length && E[i] <= t + 0.2; i += 5) {
       const age = t - E[i], bolt = E[i + 1] === 1;
+      if (E[i + 1] === 2) { const h = race.hazards.list[E[i + 2]]; if (h && age >= 0 && age < dt) race.hazards.knock(h); continue; }
       if (age < 0 || age >= (bolt ? BOLT_T : WAVE_T)) continue;
       if (!bolt) {
         let m = this.wavePool[nw++];
@@ -270,6 +284,7 @@ export class Replay {
       if (vis) r.visuals(dt, race.t);
     });
     this.playItems(fi); this.playEvents(dt);
+    race.hazards.update(dt, this.t0 + this.t, this.noRacers); // los obstáculos se mueven como en la carrera, sin chocar con nadie
     // fantasma de la contrarreloj: también repite su vuelta
     const gh = race.ghost, g = race.ghostData;
     if (gh && g) {
