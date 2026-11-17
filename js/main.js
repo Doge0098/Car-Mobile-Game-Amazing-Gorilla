@@ -14,6 +14,7 @@ import { Podium } from './podium.js';
 import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
 import { Tutorial, TUTORIAL } from './tutorial.js';
 import { buildShowroom } from './showroom.js';
+import { share } from './share.js';
 import { t, lang, setLang, initI18n } from './i18n.js';
 import { MISSIONS, MISSION_COUNT, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
@@ -262,7 +263,7 @@ function startRace(trackId) {
       playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
       rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
       rivalDef: hasRival() ? rivalDef() : null,
-      ghostData: mode === 'time' ? save.ghosts[recKey()] : null, onEvent: onRaceEvent,
+      ghostData: mode === 'time' ? (share.ghost(currentTrack.id, variant) || save.ghosts[recKey()]) : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; frameAvg = 1 / 60; lowT = 0; stepGap = 2;
     hint('');
@@ -508,6 +509,7 @@ function showResults() {
     if (record) { save.best[recKey()] = Math.round(tm * 100) / 100; save.ghosts[recKey()] = race.rec; A.playJingle?.('record'); }
     reward = 20 + me.bananas + (record ? 50 : 0);
     if (record) extras.push('récord +50');
+    reward += share.timeResult({ time: tm, record, list, extras, track: currentTrack, variant, rec: race.rec, char: save.char, kart: save.kart }) || 0;
     $('r-next').textContent = 'Menú ▶';
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
@@ -541,7 +543,7 @@ function showResults() {
   if (mr) { reward += mr; extras.push(fill('misiones +{mr}', { mr })); }
   recordRace(save, { mode, pos: me.pos, st: me.st, time: race.time, missions: missions.filter(x => x.done).length, record });
   $('r-sub').textContent = sub;
-  $('r-replay').classList.toggle('hidden', !!race.rules || race.replay.frames.length < 30);
+  $('r-replay').classList.toggle('hidden', race.replay.frames.length < 30);
   $('r-reward').textContent = `+${reward} 🍌` + (extras.length ? ` (${extras.join(' · ')})` : '');
   earn(reward); persist(); awardAchievements();
   if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
@@ -597,7 +599,7 @@ function showCupFinal() {
 }
 
 function toMenu() {
-  disposeRace(); cupState = null; if (mode === 'tutorial') mode = 'race';
+  disposeRace(); cupState = null; share.reset(); if (mode === 'tutorial') mode = 'race';
   startMusic(MENU_MUSIC); refreshShow(); show('menu');
 }
 
@@ -831,7 +833,7 @@ function wireUi() {
   // con el juego en pausa no se reactiva el sonido al tocar la pantalla
   document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
   // la primera vez se ofrece el tutorial
-  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else show('menu'); };
+  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else { show('menu'); share.afterStart(); } };
   $('tuto-reward').textContent = TUTORIAL.reward;
   $('tuto-yes').onclick = () => { sfx.ui(); startTutorial(); };
   $('tuto-no').onclick = () => { sfx.back(); show('menu'); };
@@ -903,13 +905,13 @@ function wireUi() {
 // ---------- Repetición ----------
 function startReplay() {
   if (!race || replaying || race.replay.frames.length < 30) return;
-  sfx.ui(); replaying = true; race.replay.start(); startEngine();
+  sfx.ui(); replaying = true; race.replay.start(); startEngine(); share.replayStart();
   $('speedfx').classList.remove('on');
   show('replay');
 }
 function endReplay() {
   if (!replaying) return;
-  replaying = false;
+  replaying = false; share.replayEnd();
   if (race.replay.playing) race.replay.stop();
   stopEngine(); race.fov = camera.fov;
   show('results');
@@ -1038,6 +1040,8 @@ A.setHaptics?.(save.settings.haptics !== false);
 if (save.settings.controls === 'tilt') enableTilt(true);
 applyControls();
 initI18n();
+share.init({ $, show, toast, sfx, get save() { return save; }, persist, earn, fmt, t, lang, canvas, getRace: () => race, getTrack: () => track, getScreen: () => screen, getMode: () => mode, getVariant: () => variant,
+  startTimeTrial: (id, v = '') => { mode = 'time'; variant = v; cupState = null; startRace(id); }, toMenu });
 refreshShow();
 resize();
 show('title');
