@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/custom.css">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -170,6 +171,7 @@
     <div class="row"><label>Resplandor</label><div class="seg" id="set-bloom"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Vibración</label><div class="seg" id="set-haptics"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Copia de seguridad</label><div class="bk-btns"><button class="btn small c3" id="set-export">Exportar</button><button class="btn small c7" id="set-import">Importar</button></div></div>
     <div class="row"><label>Progreso</label><button class="btn small danger" id="set-reset">Borrar partida</button></div>
     <p class="help" lang="es" data-noi18n>
       <b>Cómo jugar:</b> el coche acelera solo. Gira con ◀ ▶ (o inclinando el móvil), mantén <b>DERRAPE</b> en las curvas
@@ -193,6 +195,10 @@
       <b>Gráficos:</b> con la <b>calidad automática</b>, si el juego va lento se quitan solos sombras, contorno y resplandor. También puedes bajar el nivel a mano.<br>
       <b>Botones:</b> puedes cambiar su tamaño y su opacidad, o pasarlos al otro lado con el modo zurdo (dirección a la derecha).<br>
       <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, H = bocina, P = pausa.<br>
+      <b>Mando:</b> funciona con un mando Bluetooth o USB. Palanca o cruceta = girar, A = derrape, B o LT = freno, X o RB = objeto, Y = bocina, Start = pausa.
+      En los menús, A acepta y B vuelve atrás.<br>
+      <b>Personalización:</b> en el garaje hay pegatinas para el coche, bailes de victoria y gestos que salen al tocar la bocina.<br>
+      <b>Copia de seguridad:</b> «Exportar» te da un código con tu partida; con «Importar» la recuperas en otro móvil.<br>
       <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
       En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
     </p>
@@ -218,10 +224,29 @@
       <b>Graphics:</b> with <b>automatic quality</b>, shadows, outline and glow are switched off by themselves if the game runs slowly. You can also lower the level by hand.<br>
       <b>Buttons:</b> you can change their size and opacity, or swap sides with left-handed mode (steering on the right).<br>
       <b>Keyboard:</b> arrows / A-D, Space = drift, E = item, H = horn, P = pause.<br>
+      <b>Gamepad:</b> works with a Bluetooth or USB controller. Stick or D-pad = steer, A = drift, B or LT = brake, X or RB = item, Y = horn, Start = pause.
+      In menus, A accepts and B goes back.<br>
+      <b>Customisation:</b> the garage has kart stickers, victory dances and emotes that pop up when you honk.<br>
+      <b>Backup:</b> “Export” gives you a code with your save; “Import” restores it on another phone.<br>
       <b>Install:</b> on Android use “Install game” or the browser menu → “Add to Home screen”.
       On iPhone: Share → “Add to Home Screen”. After that it works offline.
     </p>
     <button class="btn small c5" id="set-privacy">📄 Política de privacidad</button>
+  </div>
+</section>
+
+<!-- COPIA DE SEGURIDAD (exportar o importar la partida con un código) -->
+<section id="s-backup" class="screen modal">
+  <div class="box wide">
+    <h2>Copia de seguridad</h2>
+    <p class="bk-text" id="bk-text"></p>
+    <textarea id="bk-code" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+    <div class="bk-row">
+      <button class="btn c3" id="bk-copy">📋 Copiar</button>
+      <button class="btn c3" id="bk-paste">📋 Pegar</button>
+      <button class="btn c1" id="bk-import">Importar</button>
+      <button class="btn c5" id="bk-close" data-padback>Cerrar</button>
+    </div>
   </div>
 </section>
 

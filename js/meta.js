@@ -1,6 +1,6 @@
 // Progresión: misiones de cada carrera, logros y estadísticas de por vida. Todo va guiado por datos.
 import { CHARACTERS, KARTS, CUPS, TRACKS } from './data.js';
-import { HATS, UPGRADES, UPGRADE_MAX, upgradeLevel } from './shop.js';
+import { HATS, STICKERS, DANCES, EMOTES, UPGRADES, UPGRADE_MAX, upgradeLevel } from './shop.js';
 import { BOSSES } from './boss.js';
 
 // ---------- Medallas de la contrarreloj ----------
@@ -184,6 +184,9 @@ export const ACHIEVEMENTS = [
   { id: 'chars', icon: '🦍', name: 'Toda la tropa', desc: 'Consigue todos los gorilas', goal: () => CHARACTERS.length, reward: 300, value: s => CHARACTERS.filter(c => s.chars.includes(c.id)).length },
   { id: 'karts', icon: '🏎️', name: 'Garaje lleno', desc: 'Consigue todos los coches', goal: () => KARTS.length, reward: 300, value: s => KARTS.filter(k => s.karts.includes(k.id)).length },
   { id: 'hats4', icon: '🎩', name: 'A la moda', desc: 'Compra 4 sombreros', goal: 4, reward: 100, value: s => HATS.filter(h => h.price > 0 && s.hats.includes(h.id)).length },
+  { id: 'stickers3', icon: '🏷️', name: 'Tuneado', desc: 'Compra 3 pegatinas', goal: 3, reward: 80, value: s => STICKERS.filter(x => x.price > 0 && s.stickers.includes(x.id)).length },
+  { id: 'dances', icon: '🕺', name: 'Rey de la pista', desc: 'Consigue todos los bailes', goal: () => DANCES.length, reward: 200, value: s => DANCES.filter(x => s.dances.includes(x.id)).length },
+  { id: 'emotes4', icon: '😎', name: 'Expresivo', desc: 'Compra 4 gestos', goal: 4, reward: 80, value: s => EMOTES.filter(x => x.price > 0 && s.emotes.includes(x.id)).length },
   { id: 'upgradeMax', icon: '🔧', name: 'A tope', desc: 'Sube una mejora al nivel máximo', goal: UPGRADE_MAX, reward: 150, value: maxUpgrade },
 ];
 export const achGoal = a => (typeof a.goal === 'function' ? a.goal() : a.goal);

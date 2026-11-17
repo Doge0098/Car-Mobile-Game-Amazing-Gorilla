@@ -264,12 +264,14 @@ export function makeGorilla(ch, override, standing = false, hat = null) {
 
 // o: { steer, mode, speedK, face, look, throwK, taunt, dt }
 // mode: drive | pound | cheer | dizzy | sad | trick | idle | dance | clap | wave
+//  y los bailes de la tienda (DANCES en shop.js): robot | disco | molino | peonza
+// userData.dance: baile fijo que manda sobre el modo pedido (vista previa del garaje)
 export function animateGorilla(g, t, o = {}) {
   const u = g.userData, { body, head, armL, armR } = u;
-  const steer = o.steer || 0, mode = o.mode || 'drive', dt = o.dt || 0.016;
+  const steer = o.steer || 0, mode = u.dance || o.mode || 'drive', dt = o.dt || 0.016;
   // --- cara ---
   if (u.face.visible) {
-    const target = FACES[o.face] || FACES.neutral, f = u.face6, k = Math.min(1, dt * 12);
+    const target = FACES[u.dance ? 'happy' : o.face] || FACES.neutral, f = u.face6, k = Math.min(1, dt * 12);
     for (let i = 0; i < 6; i++) f[i] += (target[i] - f[i]) * k;
     u.blink -= dt; if (u.blink < -0.12) u.blink = 2 + Math.random() * 3.5;
     const eyeY = u.blink < 0 ? 0.12 : f[5];
@@ -283,7 +285,7 @@ export function animateGorilla(g, t, o = {}) {
     u.mouth.scale.set(f[2], f[3], 1); u.teeth.visible = f[4] > 0.5;
   }
   // --- cuerpo ---
-  const ax = -1.13, ay = 0.42;
+  const ax = -1.13, ay = 0.42, sit = !u.baseY; // sentado en el coche (de pie, en el podio)
   body.scale.setScalar(1);
   body.position.y = u.baseY + Math.sin(t * 14) * 0.012 * (0.3 + (o.speedK || 0));
   body.rotation.set(0, 0, -steer * 0.14);
@@ -323,8 +325,40 @@ export function animateGorilla(g, t, o = {}) {
   } else if (mode === 'wave') {
     armL.rotation.set(-2.8, 0, -0.3 + Math.sin(t * 10) * 0.4); armR.rotation.set(0.05, 0, 0.14);
     head.rotation.set(-0.05, Math.sin(t * 2.4) * 0.2, 0.08);
+  } else if (mode === 'robot') {
+    // robot: posturas secas que cambian a golpes (un brazo al frente, arriba, abajo...) y la cabeza gira a tirones
+    const b = t * 3.2, i = Math.floor(b), k = Math.min(1, (b - i) * 4.5), e = k * k * (3 - 2 * k);
+    const pose = (a, n) => a[(((i + n) % 4) + 4) % 4], mix = a => pose(a, -1) + (pose(a, 0) - pose(a, -1)) * e;
+    armL.rotation.set(mix(ROBOT_L), 0, -0.12); armR.rotation.set(mix(ROBOT_R), 0, 0.12);
+    head.rotation.set(0, mix(ROBOT_H), 0);
+    body.rotation.set(0, mix(ROBOT_H) * (sit ? -0.15 : -0.45), mix(ROBOT_H) * 0.12);
+    body.position.y += (1 - k) * 0.07;
+  } else if (mode === 'disco') {
+    // disco: un brazo señala al cielo y cruza hacia abajo al compás; cada dos compases cambia de brazo
+    const b = t * 5.2, k = 0.5 + 0.5 * Math.max(-1, Math.min(1, Math.sin(b) * 2.4)), sd = Math.floor(b / (Math.PI * 4)) % 2 ? -1 : 1;
+    const P = sd > 0 ? armR : armL, Q = sd > 0 ? armL : armR;
+    P.rotation.set(-0.75 - 1.9 * k, 0, sd * (0.95 - 1.45 * k)); Q.rotation.set(0.35 * (2 * k - 1), 0, sd * 0.3);
+    body.position.y += Math.abs(Math.sin(b)) * 0.1;
+    body.rotation.set(0, sd * (0.5 - k) * (sit ? 0.25 : 0.7), sd * (k - 0.5) * 0.22);
+    head.rotation.set(0.12 - 0.4 * k, sd * (0.5 - k) * 0.7, 0);
+  } else if (mode === 'molino') {
+    // molino: los brazos dan vueltas completas, uno detrás de otro (sentado se abren para no rozar el coche)
+    const a = t * 7.5, op = sit ? 0.6 : 0.28;
+    armL.rotation.set(-a, 0, op); armR.rotation.set(-a + Math.PI, 0, -op);
+    body.position.y += Math.abs(Math.sin(a)) * 0.1;
+    body.rotation.set(0, Math.sin(a * 0.5) * (sit ? 0.12 : 0.4), Math.sin(a) * 0.06);
+    head.rotation.set(-0.15, Math.sin(a * 0.5) * 0.35, Math.sin(a) * 0.1);
+  } else if (mode === 'peonza') {
+    // peonza: salto con vuelta completa y brazos en cruz, y al caer los levanta (sentado el tronco solo se retuerce)
+    const c = (t * 0.85) % 1, e = Math.min(1, c / 0.62), sp = e * e * (3 - 2 * e), jump = Math.sin(e * Math.PI), up = c > 0.62 ? Math.sin((c - 0.62) / 0.38 * Math.PI) : 0;
+    armL.rotation.set(-2.9 * up, 0, 1.35 - 0.9 * up); armR.rotation.set(-2.9 * up, 0, -1.35 + 0.9 * up);
+    body.position.y += jump * (sit ? 0.14 : 0.85) + up * 0.06;
+    body.rotation.set(0, sit ? Math.sin(sp * Math.PI * 2) * 0.45 : sp * Math.PI * 2, 0);
+    head.rotation.set(-0.15 - 0.2 * up, 0, Math.sin(t * 6) * 0.08);
   }
 }
+// posturas del baile del robot: giro de cada brazo (hacia delante) y de la cabeza
+const ROBOT_L = [-1.57, -2.9, -1.57, -0.15], ROBOT_R = [-0.15, -1.57, -2.9, -1.57], ROBOT_H = [0.65, 0, -0.65, 0];
 
 // ---------------- COCHES TEMÁTICOS ----------------
 // Cada constructor devuelve { parts, glow, wheels: [[x, radio, z]], seat: altura del asiento }
@@ -473,11 +507,207 @@ function kartGeos(def, color) {
   kartCache.set(key, K); return K;
 }
 
+// ---------------- PEGATINAS ----------------
+// Dibujos de las pegatinas de la tienda (id de STICKERS en shop.js) en un lienzo de 128 unidades.
+// Cada una es una lista de piezas [trazado SVG, color]: llevan borde blanco troquelado y contorno de tinta.
+// Con un tercer valor la pieza es un detalle (solo relleno) y una función dibuja a mano sobre el lienzo.
+const INK = '#1a0b3a';
+const oval = (x, y, rx, ry) => `M${x - rx} ${y}a${rx} ${ry} 0 1 0 ${rx * 2} 0a${rx} ${ry} 0 1 0 ${-rx * 2} 0Z`;
+const starPath = (x, y, R, r) => { let d = ''; for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - HPI, q = i % 2 ? r : R; d += (i ? 'L' : 'M') + (x + Math.cos(a) * q).toFixed(1) + ' ' + (y + Math.sin(a) * q).toFixed(1); } return d + 'Z'; };
+const STICKER_DRAW = {
+  rayo: [['M78 6L28 72H58L44 122L100 50H70L90 6Z', '#ffd21f'], ['M80 14L44 64H60L72 14Z', '#fff6b0', 1]],
+  llama: [['M64 6C72 30 104 46 104 80C104 104 86 122 64 122C42 122 24 104 24 80C24 62 34 52 40 38C46 50 52 54 58 50C62 38 58 22 64 6Z', '#ff4f1a'],
+    ['M64 56C70 74 86 82 86 98C86 110 76 117 64 117C52 117 42 110 42 98C42 86 58 76 64 56Z', '#ffd21f', 1]],
+  estrella: [[starPath(64, 68, 58, 25), '#ffd21f'], [starPath(64, 68, 34, 14.5), '#fff6b0', 1]],
+  corazon: [['M64 116C12 80 6 46 24 26C40 10 58 18 64 34C70 18 88 10 104 26C122 46 116 80 64 116Z', '#ff3b6a'], [oval(40, 44, 10, 7), 'rgba(255,255,255,.6)', 1]],
+  huella: [['M64 60C82 60 98 82 96 98C94 113 78 116 64 111C50 116 34 113 32 98C30 82 46 60 64 60Z', '#ff7a1a'],
+    [oval(24, 56, 11, 14), '#ff7a1a'], [oval(47, 30, 11, 15), '#ff7a1a'], [oval(81, 30, 11, 15), '#ff7a1a'], [oval(104, 56, 11, 14), '#ff7a1a']],
+  platano: [['M18 34C20 84 62 120 112 100C118 96 118 86 110 84C80 86 50 62 42 30C40 20 20 20 18 34Z', '#ffd21f'],
+    ['M28 44C34 76 62 100 98 96C70 92 44 70 36 40Z', '#fff6b0', 1], [oval(30, 25, 10, 5), '#7a4a22', 1], [oval(113, 92, 5, 8), '#7a4a22', 1]],
+  calavera: [['M64 8C36 8 16 28 16 54C16 70 24 81 36 87V104C36 111 40 116 47 116H81C88 116 92 111 92 104V87C104 81 112 70 112 54C112 28 92 8 64 8Z', '#f5f5f5'],
+    [oval(45, 56, 12, 14), INK, 1], [oval(83, 56, 12, 14), INK, 1], ['M64 70L57 84H71Z', INK, 1], ['M51 98h4v18h-4ZM62 98h4v18h-4ZM73 98h4v18h-4Z', INK, 1]],
+  dorsal: [[oval(64, 64, 56, 56), '#ffffff'], c => {
+    c.font = 'italic 900 92px "Trebuchet MS", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.lineWidth = 9; c.strokeStyle = INK; c.strokeText('7', 61, 70); c.fillStyle = '#e01b2f'; c.fillText('7', 61, 70);
+  }],
+};
+// Material de cada pegatina (uno por dibujo, compartido por todos los coches que la lleven)
+const stickerMats = new Map();
+function stickerMat(id) {
+  const parts = STICKER_DRAW[id]; if (!parts) return null;
+  let m = stickerMats.get(id);
+  if (!m) {
+    const map = canvasTex(256, 256, c => {
+      c.translate(128, 128); c.scale(1.48, 1.48); c.translate(-64, -64); c.lineJoin = c.lineCap = 'round'; // margen para los bordes
+      const body = parts.filter(q => typeof q !== 'function' && !q[2]).map(q => [new Path2D(q[0]), q[1]]);
+      for (const [w, col] of [[34, INK], [26, '#fff'], [8, INK]]) { c.lineWidth = w; c.strokeStyle = col; for (const [q] of body) c.stroke(q); }
+      for (const [q, col] of body) { c.fillStyle = col; c.fill(q); }
+      for (const q of parts) { if (typeof q === 'function') q(c); else if (q[2]) { c.fillStyle = q[1]; c.fill(new Path2D(q[0])); } }
+    });
+    m = new THREE.MeshToonMaterial({ map, gradientMap: toonGradient(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    stickerMats.set(id, m);
+  }
+  return m;
+}
+
+// Dónde va la pegatina: en cada hueco (los dos lados y el capó) se lanzan rayos contra la carrocería hasta dar con
+// la zona más despejada y de un solo color, y allí se amolda a la chapa una rejilla orientada según su normal.
+// Así vale para cualquier coche sin posiciones a mano. Se calcula una sola vez por modelo y queda en caché.
+const DECAL_SIZES = [0.9, 0.75, 0.62, 0.5], DECAL_N = 7, DECAL_LIFT = 0.022;
+const DECAL_PROBE = [-0.42, -0.21, 0, 0.21, 0.42], DECAL_STEP = 0.1, DECAL_BAD = 0.03; // tanteo de la zona: rejilla de puntos, escalón que se tolera y nota máxima
+const steps = (a, b, st) => { const o = []; for (let v = a; v <= b + 1e-6; v += st) o.push(v); return o; };
+const DECAL_SLOTS = [1, -1].map(sd => ({
+  // lado: se mira desde fuera y algo por encima; entre los ejes y sin arrimarse al piloto, mejor cuanto más hacia fuera y más alta
+  dir: [-0.82 * sd, -0.57, 0], up: [0, 1, 0], aims: steps(-0.9, 1.1, 0.25).flatMap(z => steps(-0.2, 1.6, 0.1).map(y => [0, y, z])),
+  zone: (x, y, z) => x * sd > 0.1 && z > -1.7 && z < 1.9,
+  ok: (P, K) => P.x * sd > 0.3 && !(Math.abs(P.x) < 0.8 && P.y > K.seat + 0.15) && K.wheels.every(([, r, wz]) => (wz > 0 ? wz - P.z : P.z - wz) > r + 0.25),
+  pref: P => 0.06 * Math.abs(P.z - 0.05) - 0.25 * Math.abs(P.x) - 0.1 * P.y,
+})).concat({
+  // capó: por delante del volante, en el eje del coche; el dibujo se lee de pie mirando el coche de frente
+  dir: [0, -0.94, -0.34], up: [0, 0, -1], aims: steps(0.6, 2.6, 0.1).map(z => [0, 0.8, z]),
+  zone: (x, y, z) => Math.abs(x) < 0.8 && z > 0.3,
+  ok: P => P.z > 0.85 && Math.abs(P.x) < 0.2, pref: P => 0.05 * Math.abs(P.z - 1.6),
+});
+// Triángulos de la carrocería que ve un hueco (los que miran hacia él dentro de su zona), en una tabla plana para lanzar rayos deprisa.
+// Por triángulo (DT números): un vértice, sus dos aristas, la normal, el color y el radio alrededor de su centro
+const DT = 16;
+function decalTris(geo, d, zone) {
+  const P = geo.attributes.position.array, C = geo.attributes.color.array, I = geo.index.array, out = [];
+  for (let i = 0; i < I.length; i += 3) {
+    const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx, l = Math.hypot(nx, ny, nz);
+    if (l < 1e-9 || (nx * d.x + ny * d.y + nz * d.z) / l > 0.2 || !zone(P[a] + (ux + vx) / 3, P[a + 1] + (uy + vy) / 3, P[a + 2] + (uz + vz) / 3)) continue;
+    out.push(P[a], P[a + 1], P[a + 2], ux, uy, uz, vx, vy, vz, nx / l, ny / l, nz / l, C[a], C[a + 1], C[a + 2], Math.max(Math.hypot(ux, uy, uz), Math.hypot(vx, vy, vz)));
+  }
+  return new Float32Array(out);
+}
+// Copia en S los triángulos de T que pasan a menos de r del punto P (los únicos que pueden tocar los rayos de tanteo); devuelve cuántos números ocupa
+function decalNear(T, S, P, r) {
+  let n = 0;
+  for (let i = 0; i < T.length; i += DT) {
+    const x = T[i] + (T[i + 3] + T[i + 6]) / 3 - P.x, y = T[i + 1] + (T[i + 4] + T[i + 7]) / 3 - P.y, z = T[i + 2] + (T[i + 5] + T[i + 8]) / 3 - P.z, q = r + T[i + 15];
+    if (x * x + y * y + z * z < q * q) { for (let j = 0; j < DT; j++) S[n + j] = T[i + j]; n += DT; }
+  }
+  return n;
+}
+// Rayo (origen o, dirección d) contra los n primeros números de la tabla: posición del triángulo más cercano por su cara vista, o -1.
+// La distancia queda en decalCast.t
+function decalCast(T, n, o, d, far) {
+  let best = far, k = -1;
+  for (let i = 0; i < n; i += DT) {
+    const ux = T[i + 3], uy = T[i + 4], uz = T[i + 5], vx = T[i + 6], vy = T[i + 7], vz = T[i + 8];
+    const px = d.y * vz - d.z * vy, py = d.z * vx - d.x * vz, pz = d.x * vy - d.y * vx, det = ux * px + uy * py + uz * pz;
+    if (det < 1e-9) continue;
+    const tx = o.x - T[i], ty = o.y - T[i + 1], tz = o.z - T[i + 2], u = tx * px + ty * py + tz * pz;
+    if (u < 0 || u > det) continue;
+    const qx = ty * uz - tz * uy, qy = tz * ux - tx * uz, qz = tx * uy - ty * ux, v = d.x * qx + d.y * qy + d.z * qz;
+    if (v < 0 || u + v > det) continue;
+    const t = (vx * qx + vy * qy + vz * qz) / det;
+    if (t > 0 && t < best) { best = t; k = i; }
+  }
+  decalCast.t = best;
+  return k;
+}
+// ¿Otra pintura? Un tono más claro o más oscuro del mismo color (los bultos de la piña, los relieves) cuenta como la misma
+function repaint(S, i, T, j) {
+  const m = Math.max(S[i], S[i + 1], S[i + 2], 1e-3), n = Math.max(T[j], T[j + 1], T[j + 2], 1e-3);
+  return m < n * 0.5 || m > n * 2 || Math.abs(S[i] / m - T[j] / n) + Math.abs(S[i + 1] / m - T[j + 1] / n) + Math.abs(S[i + 2] / m - T[j + 2] / n) > 0.25;
+}
+const decalCache = new Map(), _dv = new THREE.Vector3(), _dw = new THREE.Vector3();
+function decalGeo(def) {
+  if (decalCache.has(def.id)) return decalCache.get(def.id);
+  const K = kartGeos(def, null); // siempre con los colores de serie: así queda en el mismo sitio con cualquier pintura
+  const n = DECAL_N, small = DECAL_SIZES[DECAL_SIZES.length - 1], dep = new Float32Array(n * n), pos = [], nor = [], uv = [], idx = [], spots = [];
+  for (const slot of DECAL_SLOTS) {
+    const d = new THREE.Vector3().fromArray(slot.dir).normalize(), up = new THREE.Vector3().fromArray(slot.up);
+    const T = decalTris(K.body, d, slot.zone), S = new Float32Array(T.length);
+    let sn = 0, tri = -1;
+    const frame = (P, N) => { const U = new THREE.Vector3().crossVectors(up, N).normalize(); return { P, N, U, V: new THREE.Vector3().crossVectors(N, U) }; };
+    const at = (f, u, v, h) => _dv.copy(f.P).addScaledVector(f.U, u).addScaledVector(f.V, v).addScaledVector(f.N, h);
+    // profundidad de la chapa bajo un punto del plano de la pegatina (NaN si no hay); deja en `tri` el triángulo tocado
+    const depth = (f, u, v) => { tri = decalCast(S, sn, at(f, u, v, 0.5), _dw.copy(f.N).negate(), 1); return tri < 0 ? NaN : decalCast.t - 0.5; };
+    // el mismo marco, pero mirando según el plano medio de la chapa en un cuadrado de lado sz (m × m puntos)
+    const level = (f, sz, m) => {
+      const pts = []; let mu = 0, mv = 0, mw = 0, uu = 0, vv = 0, uw = 0, vw = 0, uvs = 0;
+      for (let k = 0; k < m * m; k++) { const u = (k % m / (m - 1) - 0.5) * sz, v = (Math.floor(k / m) / (m - 1) - 0.5) * sz, w = depth(f, u, v); if (w === w) { pts.push([u, v, -w]); mu += u; mv += v; mw -= w; } }
+      if (pts.length < 5) return f;
+      for (const q of pts) { const u = q[0] - mu / pts.length, v = q[1] - mv / pts.length, w = q[2] - mw / pts.length; uu += u * u; vv += v * v; uvs += u * v; uw += u * w; vw += v * w; }
+      const det = uu * vv - uvs * uvs; if (det < 1e-9) return f;
+      const a = (uw * vv - vw * uvs) / det, b = (vw * uu - uw * uvs) / det; // pendiente del plano medio en cada eje
+      return a * a + b * b < 0.0025 ? f : frame(f.P, f.N.clone().addScaledVector(f.U, -a).addScaledVector(f.V, -b).normalize());
+    };
+    // candidatas: donde caen los rayos de tanteo en una zona permitida, de la mejor a la peor situada
+    const cands = [];
+    for (const a of slot.aims) {
+      const k = decalCast(T, T.length, _dw.fromArray(a).addScaledVector(d, -9), d, 20); if (k < 0) continue;
+      const P = new THREE.Vector3().fromArray(a).addScaledVector(d, decalCast.t - 9);
+      if (slot.ok(P, K) && Math.abs(T[k + 10] * up.y + T[k + 11] * up.z) < 0.98) cands.push({ P, k, pref: slot.pref(P), f: null });
+    }
+    cands.sort((a, b) => a.pref - b.pref);
+    // gana el mayor tamaño que quepa en alguna y, a igual tamaño, la mejor situada; si no cabe en ninguna, la menos mala con el tamaño mínimo
+    let best = null, size = small;
+    for (const sz of DECAL_SIZES) {
+      for (const c of cands) {
+        if (best && best.fits && best.cost <= c.pref) break; // las que quedan ya no pueden mejorarla
+        if (c.f === 0) continue;
+        sn = decalNear(T, S, c.P, 0.85);
+        if (!c.f) { // la primera vez se orienta según el plano medio de la chapa (los bultos y las aristas de una cara no cuentan)
+          const f = level(frame(c.P, new THREE.Vector3(T[c.k + 9], T[c.k + 10], T[c.k + 11])), 0.5, 3);
+          c.f = f.N.dot(d) > -0.5 || Math.abs(f.N.dot(up)) > 0.98 ? 0 : f; if (!c.f) continue;
+        }
+        // nota de la zona: lo que cae fuera de la chapa o sobre otra pintura (aros, ventanillas, dientes) y los escalones grandes
+        let bad = 0;
+        for (let q = 0; q < 25 && (bad < DECAL_BAD || sz === small); q++) {
+          const w = depth(c.f, DECAL_PROBE[q % 5] * sz, DECAL_PROBE[Math.floor(q / 5)] * sz);
+          bad += (tri < 0 || repaint(S, tri + 12, T, c.k + 12) ? 0.5 : Math.min(0.5, Math.max(0, Math.abs(w) - DECAL_STEP))) / 25;
+        }
+        const fits = bad < DECAL_BAD, cost = bad + c.pref;
+        if ((fits || sz === small) && (!best || fits > best.fits || (fits === best.fits && cost < best.cost))) best = { f: c.f, cost, fits };
+      }
+      if (best && best.fits) { size = sz; break; }
+    }
+    if (!best) continue;
+    // rejilla proyectada sobre la chapa, orientada según el plano medio de toda la pegatina
+    const g = i => (i / (n - 1) - 0.5) * size;
+    sn = decalNear(T, S, best.f.P, 0.85);
+    const f = level(best.f, size, n);
+    let sum = 0, cnt = 0;
+    for (let k = 0; k < n * n; k++) { const w = dep[k] = depth(f, g(k % n), g(Math.floor(k / n))); if (w === w) { sum += w; cnt++; } }
+    for (let k = 0; k < n * n; k++) if (dep[k] !== dep[k]) dep[k] = cnt ? sum / cnt : 0; // sin chapa debajo: a la altura media
+    // no se mete en las grietas: se apoya en lo que sobresale (mínimo y media de los vecinos), sin hundirse nunca en la chapa
+    const near = (src, min) => src.map((_, k) => {
+      const i = k % n, j = (k - i) / n; let r = min ? 9 : 0, c = 0;
+      for (let b = Math.max(0, j - 1); b <= Math.min(n - 1, j + 1); b++) for (let a = Math.max(0, i - 1); a <= Math.min(n - 1, i + 1); a++) { r = min ? Math.min(r, src[b * n + a]) : r + src[b * n + a]; c++; }
+      return min ? r : r / c;
+    });
+    const soft = near(near(dep, true), false), base = pos.length / 3;
+    for (let k = 0; k < n * n; k++) {
+      const i = k % n, j = (k - i) / n; at(f, g(i), g(j), DECAL_LIFT - Math.min(soft[k], dep[k]));
+      pos.push(_dv.x, _dv.y, _dv.z); nor.push(f.N.x, f.N.y, f.N.z); uv.push(i / (n - 1), j / (n - 1));
+      if (i && j) idx.push(base + k - n - 1, base + k - n, base + k, base + k - n - 1, base + k, base + k - 1);
+    }
+    spots.push({ P: f.P.toArray(), N: f.N.toArray(), size });
+  }
+  let geo = null;
+  if (idx.length) {
+    geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
+    geo.userData.spots = spots; // dónde ha quedado cada pegatina (para las pruebas)
+  }
+  decalCache.set(def.id, geo);
+  return geo;
+}
+
 // wheels: id de estilo de rueda de la tienda (null = estándar). Las ruedas grandes levantan la carrocería.
-export function makeKart(def, colorOverride, override, wheels = null) {
+// sticker: id de pegatina de la tienda (null o 'none' = sin ella); el fantasma (override) no la lleva.
+export function makeKart(def, colorOverride, override, wheels = null, sticker = null) {
   const K = kartGeos(def, colorOverride), M = override || toonVC, ol = !override, S = wheelStyle(wheels), wk = S.k || 1;
   const k = new THREE.Group(), bodyG = new THREE.Group(); k.add(bodyG);
   part(bodyG, K.body, M, ol);
+  const sm = override ? null : stickerMat(sticker), sg = sm && decalGeo(def);
+  if (sg) bodyG.add(new THREE.Mesh(sg, sm));
   if (K.glow) part(bodyG, K.glow, override || glowVC);
   const wheel = part(bodyG, K.steer, M); wheel.position.set(0, K.seat + 0.69, 0.38); wheel.rotation.set(-0.75, 0, 0);
   const list = [];

@@ -1,5 +1,5 @@
-// Tienda del garaje: mejoras del coche y personalización del jugador (sombreros, ruedas, estelas y bocinas).
-// Solo datos: los modelos están en models.js (HAT_BUILD, WHEEL_STYLES) y los sonidos en audio.js (sfx.horn).
+// Tienda del garaje: mejoras del coche y personalización del jugador (sombreros, ruedas, estelas, bocinas, pegatinas, bailes y gestos).
+// Solo datos: los modelos están en models.js (HAT_BUILD, WHEEL_STYLES, STICKER_DRAW, los bailes de animateGorilla), los sonidos en audio.js (sfx.horn) y los bocadillos en emotes.js.
 
 // ---------- Mejoras del coche (solo para el jugador) ----------
 export const UPGRADE_MAX = 5;
@@ -60,12 +60,49 @@ export const HORNS = [
   { id: 'espacial', name: 'Espacial', icon: '🛸', price: 250, desc: 'Sonido de otro planeta.' },
 ];
 
+// ---------- Pegatinas del coche (dibujadas en models.js: STICKER_DRAW) ----------
+export const STICKERS = [
+  { id: 'none', name: 'Sin pegatina', icon: '🚫', price: 0, desc: 'La carrocería, tal cual sale de fábrica.' },
+  { id: 'rayo', name: 'Rayo', icon: '⚡', price: 100, desc: 'Para ir como una centella.' },
+  { id: 'llama', name: 'Llama', icon: '🔥', price: 120, desc: 'El clásico de los bólidos.' },
+  { id: 'estrella', name: 'Estrella', icon: '⭐', price: 120, desc: 'Naciste para brillar.' },
+  { id: 'corazon', name: 'Corazón', icon: '❤️', price: 150, desc: 'Corre con el corazón.' },
+  { id: 'huella', name: 'Huella', icon: '🐾', price: 150, desc: 'La marca de la manada.' },
+  { id: 'platano', name: 'Plátano', icon: '🍌', price: 200, desc: 'El emblema oficial de la selva.' },
+  { id: 'calavera', name: 'Calavera', icon: '💀', price: 250, desc: 'Aviso para los rivales.' },
+  { id: 'dorsal', name: 'Dorsal 7', icon: '🏁', price: 300, desc: 'El número de la suerte.' },
+];
+
+// ---------- Bailes de victoria ----------
+// mode: modo de animateGorilla (models.js); el clásico no tiene: usa la celebración de siempre
+export const DANCES = [
+  { id: 'clasico', name: 'Clásico', icon: '🙌', price: 0, mode: '', desc: 'La celebración de toda la vida.' },
+  { id: 'robot', name: 'Robot', icon: '🤖', price: 200, mode: 'robot', desc: 'Movimientos secos, de hojalata.' },
+  { id: 'disco', name: 'Disco', icon: '🕺', price: 250, mode: 'disco', desc: 'Un dedo al cielo y a la pista.' },
+  { id: 'molino', name: 'Molino', icon: '🌀', price: 300, mode: 'molino', desc: 'Los brazos giran como aspas.' },
+  { id: 'peonza', name: 'Peonza', icon: '💫', price: 400, mode: 'peonza', desc: 'Saltos y vueltas sin marearse.' },
+];
+
+// ---------- Gestos (bocadillo sobre el coche al tocar la bocina) ----------
+export const EMOTES = [
+  { id: 'hola', name: 'Saludo', icon: '👋', price: 0, desc: '¡Hola y adiós!' },
+  { id: 'risa', name: 'Carcajada', icon: '😂', price: 80, desc: 'Para cuando adelantas.' },
+  { id: 'guay', name: 'Crack', icon: '😎', price: 100, desc: 'Con mucho estilo.' },
+  { id: 'burla', name: 'Burla', icon: '😜', price: 100, desc: '¡A que no me pillas!' },
+  { id: 'fuerza', name: 'Fuerza', icon: '💪', price: 120, desc: 'Puro músculo de gorila.' },
+  { id: 'monito', name: 'Monito', icon: '🙈', price: 150, desc: 'Mejor no mirar.' },
+  { id: 'beso', name: 'Besito', icon: '😘', price: 150, desc: 'Con cariño para los de atrás.' },
+];
+
 // Pestañas de personalización del garaje: lista, campos de la partida (comprados / elegido) y nota de ayuda
 export const SHOP = [
   { tab: 'hats', label: 'Sombreros', list: HATS, owned: 'hats', cur: 'hat', hint: 'Lo llevarás en carrera, en el podio y en tu fantasma.' },
   { tab: 'wheels', label: 'Ruedas', list: WHEELS, owned: 'wheels', cur: 'wheel', hint: 'Valen para todos tus coches.' },
   { tab: 'trails', label: 'Estelas', list: TRAILS, owned: 'trails', cur: 'trail', hint: 'La estela que dejas cuando llevas turbo.' },
   { tab: 'horns', label: 'Bocinas', list: HORNS, owned: 'horns', cur: 'horn', hint: 'En carrera: pulsa OBJETO cuando no lleves ninguno (tecla H).' },
+  { tab: 'stickers', label: 'Pegatinas', list: STICKERS, owned: 'stickers', cur: 'sticker', hint: 'Va en los dos lados y en el capó de todos tus coches.' },
+  { tab: 'dances', label: 'Bailes', list: DANCES, owned: 'dances', cur: 'dance', hint: 'Lo bailas en el podio y al acabar entre los 3 primeros.' },
+  { tab: 'emotes', label: 'Gestos', list: EMOTES, owned: 'emotes', cur: 'emote', hint: 'Aparece sobre tu coche cuando tocas la bocina.' },
 ];
 
 export const byId = (list, id) => list.find(x => x.id === id) || list[0];

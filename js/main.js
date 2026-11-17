@@ -12,6 +12,10 @@ import { setOutline, setOutlineRes } from './outline.js';
 import { Post } from './post.js';
 import { Podium } from './podium.js';
 import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
+import { DANCES, EMOTES } from './shop.js';
+import { Emotes } from './emotes.js';
+import { initPad, padFrame } from './input.js';
+import { exportCode, importCode, applyImport } from './save.js';
 import { Tutorial, TUTORIAL } from './tutorial.js';
 import { buildShowroom } from './showroom.js';
 import { share } from './share.js';
@@ -91,16 +95,16 @@ function applyShowOffset() {
 }
 let showTrail = null, showTrailDef = null; // vista previa de la estela en el garaje
 const _hue = new THREE.Color(), hueHex = h => _hue.setHSL(h - Math.floor(h), 1, 0.56).getHex();
-function setShowModel(charId, kartId, colorIdx, hat = null, wheels = null) {
+function setShowModel(charId, kartId, colorIdx, hat = null, wheels = null, sticker = null) {
   const ry = showModel ? showModel.rotation.y : 0;
   if (showModel) menuScene.remove(showModel);
   showModel = new THREE.Group(); showModel.rotation.y = ry;
-  showKart = makeKart(kartById(kartId), KART_COLORS[colorIdx] || null, null, wheels);
+  showKart = makeKart(kartById(kartId), KART_COLORS[colorIdx] || null, null, wheels, sticker);
   showGorilla = mountGorilla(showKart, makeGorilla(charById(charId), null, false, hat));
   showModel.add(showKart, showGorilla, blobShadow());
   menuScene.add(showModel);
 }
-const refreshShow = () => setShowModel(save.char, save.kart, save.color, save.hat, save.wheel);
+const refreshShow = () => setShowModel(save.char, save.kart, save.color, save.hat, save.wheel, save.sticker);
 // Cinta de muestra de la estela: opaca (no aditiva) para que se distinga sobre el fondo claro del escaparate
 const ST_N = 14;
 function makeShowTrail() {
@@ -276,6 +280,7 @@ function startRace(trackId) {
       paceTime: mode === 'time' ? (medalTimes(currentTrack.id) || [0])[0] : 0,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
       playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
+      playerSticker: save.sticker, playerDance: byId(DANCES, save.dance).mode, playerEmote: byId(EMOTES, save.emote).icon,
       rivals: mode === 'boss' ? [{ char: bossNow.id, charDef: bossNow.char, kart: bossNow.kart, color: bossNow.color, size: bossNow.size, boss: bossNow }]
         : cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
       rivalDef: hasRival() ? rivalDef() : null, assistSteer: !!save.settings.assistSteer, autoDrift: !!save.settings.autoDrift,
@@ -549,7 +554,7 @@ function showResults() {
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
     if (mode === 'cup') {
-      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels }; });
+      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, sticker: r.sticker, dance: r.dance }; });
       sub = `${cupState.cup.name} · Carrera ${cupState.i + 1}/3 · ${currentTrack.name}`;
     }
     const ru = race.rules;
@@ -594,7 +599,7 @@ function showResults() {
   $('r-replay').classList.toggle('hidden', race.replay.frames.length < 30);
   $('r-reward').textContent = `+${reward} 🍌` + (extras.length ? ` (${extras.join(' · ')})` : '');
   earn(reward); persist(); awardAchievements();
-  if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
+  if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, sticker: r.sticker, dance: r.dance, isPlayer: r.isPlayer })), me.pos, false);
   else show('results');
 }
 
@@ -808,15 +813,16 @@ function buildGarage() {
   if (gSel.stats) $('g-stats').innerHTML = Object.keys(STAT_NAMES).map(k => `<div class="stat"><span>${STAT_NAMES[k]}</span><div class="bar"><i style="width:${gSel.stats[k] * 20}%"></i></div></div>`).join('');
   else if (L.hint) $('g-stats').innerHTML = `<small class="note">${L.hint}</small>`;
   if (gTab === 'trails') showTrailDef = gSel;
+  previewCustom();
   if (gSel.id === cur) { act.textContent = '✔ Elegido'; act.disabled = true; }
   else if (owned.includes(gSel.id)) act.textContent = 'Elegir';
   else act.textContent = fill('Comprar por 🍌 {price}', gSel);
 }
 // Muestra en el escaparate lo que se está mirando (aunque no esté comprado); las bocinas se prueban de oído
 function previewSel() {
-  const o = { char: save.char, kart: save.kart, hat: save.hat, wheel: save.wheel }, L = GARAGE_LISTS[gTab];
+  const o = { char: save.char, kart: save.kart, hat: save.hat, wheel: save.wheel, sticker: save.sticker }, L = GARAGE_LISTS[gTab];
   if (L && gSel) o[L.cur] = gSel.id;
-  setShowModel(o.char, o.kart, save.color, o.hat, o.wheel);
+  setShowModel(o.char, o.kart, save.color, o.hat, o.wheel, o.sticker);
   if (gTab === 'horns') sfx.horn(gSel.id);
 }
 function garageAction() {
@@ -837,6 +843,53 @@ function garageAction() {
   }
   persist(); refreshShow(); showPound = 1.2; showSpin = 4; buildGarage();
   syncWallet(); awardAchievements();
+}
+
+// ---------- Bailes y gestos del garaje, mando y copia de seguridad ----------
+// Vista previa: el baile que se mira lo baila el gorila del escaparate y el gesto sale en su bocadillo
+const showEmotes = new Emotes(() => tGlobal, 1);
+function previewCustom() {
+  if (gTab === 'dances') showGorilla.userData.dance = gSel.mode || 'cheer';
+  else if (gTab === 'emotes') showEmotes.show({ root: showModel, emoteY: showKart.userData.seat + 2.45, emoteK: 0.85 }, gSel.icon, 1e9);
+  else return;
+  showModel.rotation.y = -0.7; showSpin = 0.6; // de frente y sin giros bruscos, para que se vea bien
+}
+// Copia de seguridad (Ajustes): la partida se exporta como un código de texto y se recupera pegándolo
+const BK_ERRORS = { foreign: 'Ese código no es de Amazing Gorilla Racing', newer: 'Ese código es de una versión más nueva del juego', broken: 'El código está incompleto o dañado' };
+function openBackup(imp) {
+  const ta = $('bk-code');
+  $('s-backup').classList.toggle('import', imp);
+  $('bk-text').textContent = imp ? 'Pega aquí el código de tu copia. Sustituirá a la partida de este dispositivo.' : 'Guarda este código en un lugar seguro: con «Importar» recuperas tu partida en cualquier dispositivo.';
+  ta.readOnly = !imp; ta.value = imp ? '' : exportCode(); ta.placeholder = imp ? t('Pega aquí tu código') : '';
+  sfx.ui(); show('backup'); ta.scrollTop = 0;
+}
+async function copyBackup() {
+  const ta = $('bk-code'); let ok = false;
+  try { await navigator.clipboard.writeText(ta.value); ok = true; } catch (e) {
+    // sin acceso al portapapeles: el texto queda seleccionado para copiarlo a mano
+    ta.focus(); ta.select(); try { ok = document.execCommand('copy'); } catch (e2) { /* sin copia automática */ }
+  }
+  if (ok) sfx.coin();
+  toast(ok ? 'Código copiado ✔' : 'Código seleccionado: cópialo a mano');
+}
+async function pasteBackup() {
+  try { $('bk-code').value = await navigator.clipboard.readText(); sfx.ui(); } catch (e) { $('bk-code').focus(); toast('Mantén pulsado el cuadro y elige «Pegar»'); }
+}
+function importBackup() {
+  const code = $('bk-code').value.trim(), r = importCode(code);
+  if (r.error) { sfx.deny(); toast(code ? BK_ERRORS[r.error] : 'Pega primero el código de tu copia'); return; }
+  if (!confirm(t('¿Sustituir la partida de este dispositivo por la de la copia ({n} 🍌)? No se puede deshacer.', { n: r.data.bananas }))) return;
+  applyImport(r.data);
+  try { sessionStorage.setItem('agr-imported', '1'); } catch (e) { /* sin almacenamiento de sesión */ }
+  location.reload();
+}
+function wireCustom() {
+  $('set-export').onclick = () => openBackup(false);
+  $('set-import').onclick = () => openBackup(true);
+  $('bk-copy').onclick = copyBackup; $('bk-paste').onclick = pasteBackup; $('bk-import').onclick = importBackup;
+  $('bk-close').onclick = () => { sfx.back(); show('settings'); };
+  $('bk-code').addEventListener('contextmenu', e => e.stopPropagation()); // en el cuadro del código sí vale el menú de copiar y pegar
+  try { if (sessionStorage.getItem('agr-imported')) { sessionStorage.removeItem('agr-imported'); setTimeout(() => toast('Copia restaurada ✔'), 500); } } catch (e) { /* sin almacenamiento de sesión */ }
 }
 
 // ---------- Misiones y logros ----------
@@ -915,6 +968,7 @@ function buildSettings() {
 
 // ---------- Eventos de interfaz ----------
 function wireUi() {
+  wireCustom();
   // con el juego en pausa no se reactiva el sonido al tocar la pantalla
   document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
   // la primera vez se ofrece el tutorial
@@ -1063,6 +1117,7 @@ function setPaused(on) {
 let last = performance.now(), tGlobal = 0;
 let fpsN = 0, fpsT = 0;
 function frame(now) {
+  padFrame(now); // mando: pulsaciones y foco de los menús
   requestAnimationFrame(frame);
   if (save.settings.battery && now - last < 30) return; // ahorro de batería: como mucho 30 imágenes por segundo
   const rdt = (now - last) / 1000, dt = Math.min(0.05, rdt); last = now;
@@ -1135,6 +1190,7 @@ function frame(now) {
 
 // ---------- Arranque ----------
 initInput();
+initPad({ onConnect: () => toast('🎮 Mando conectado'), onDisconnect: () => toast('🎮 Mando desconectado'), onMove: () => sfx.tick() });
 wireUi();
 setVolumes(save.settings.music, save.settings.sfx);
 A.setHaptics?.(save.settings.haptics !== false);

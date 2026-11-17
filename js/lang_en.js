@@ -451,6 +451,13 @@ export const EN = {
 };
 
 // Plantillas con huecos {x}: [español, inglés]. Se prueban en orden; las más generales, al final.
+Object.assign(EN, {
+  // ---------- Logros de personalización ----------
+  'Tuneado': 'Pimped out', 'Compra 3 pegatinas': 'Buy 3 stickers',
+  'Rey de la pista': 'King of the dance floor', 'Consigue todos los bailes': 'Get every dance',
+  'Expresivo': 'Expressive', 'Compra 4 gestos': 'Buy 4 emotes',
+});
+
 export const EN_PATTERNS = [
   ['{icon} Logro: {name} · +{reward} 🍌', '{icon} Award: {name} · +{reward} 🍌'],
   ['✓ Misión cumplida: {text}', '✓ Mission complete: {text}'],
