@@ -6,7 +6,7 @@ import { BOSSES } from './boss.js';
 // ---------- Medallas de la contrarreloj ----------
 // MEDAL_REF: tiempo (s) de una vuelta limpia de referencia en cada circuito; de él salen oro, plata y bronce.
 // (medido con el gorila y el coche iniciales; con mejor coche o buenos derrapes se baja de ahí)
-export const MEDAL_REF = { selva: 92.9, playa: 91.4, volcan: 93.6, hielo: 91.2, neon: 89.7, arcoiris: 90.3, nubes: 93.3, oceano: 102.7, abismo: 92.3 };
+export const MEDAL_REF = { selva: 92.9, playa: 91.4, volcan: 93.6, hielo: 91.2, neon: 89.7, arcoiris: 90.3, nubes: 93.3, oceano: 102.7, abismo: 92.3, desierto: 96.1, fabrica: 96.4, estacion: 97 };
 export const MEDAL_NAMES = ['', 'Bronce', 'Plata', 'Oro'], MEDAL_REWARD = [0, 20, 40, 80];
 // Devuelve [oro, plata, bronce] en segundos, o null si el circuito no tiene tiempos (el circuito sorpresa)
 export function medalTimes(trackId) {

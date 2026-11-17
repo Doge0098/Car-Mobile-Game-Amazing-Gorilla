@@ -707,7 +707,7 @@ function buildCups() {
   CUPS.forEach((cup, i) => {
     const ok = cupUnlocked(i), c = document.createElement('button');
     const t0 = trackById(cup.tracks[0]), tr = save.trophies[cup.id + '_' + diff().id];
-    c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t0); c.style.minHeight = '150px';
+    c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t0); c.style.minHeight = '182px'; // alto para que el título no quede bajo el icono
     c.innerHTML = `<span class="emoji">${cup.icon}</span><h3>${ok ? cup.name : '🔒 ' + cup.name}</h3>` +
       `<p>${cup.tracks.map(id => trackById(id).name).join(' · ')}</p><p>${tr ? ['🏆 Oro', '🥈 Plata', '🥉 Bronce'][tr - 1] + ' en ' + diff().name : ok ? '3 carreras · sin trofeo aún' : lockText(i)}</p>`;
     c.onclick = () => {
