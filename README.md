@@ -16,12 +16,16 @@ Es una **PWA**: se instala desde el navegador y después funciona **sin conexió
   Cada copa se desbloquea ganando un trofeo en la anterior. Los mapas tienen cuestas, puente, túnel, rampas de salto y monumentos propios.
 - **Coche que se transforma** en barco, ala delta o submarino según el tramo, con aros de impulso.
   Con el ala delta, DERRAPE sube y FRENO baja: los aros están a distinta altura. En el agua hay corrientes que empujan.
-- **Atajos**: un trampolín verde en el arcén de algunas curvas lanza el coche por encima. Los rivales también los usan.
+- **Atajos y bifurcaciones**: un trampolín verde en el arcén de algunas curvas lanza el coche por encima, y en otras la carretera
+  se divide en dos: el carril estrecho es más corto y tiene acelerador. Los rivales también los usan.
+- **Rebufo**: ir pegado detrás de un rival carga un impulso para adelantarlo.
 - **Modos de juego**
   - Carrera rápida, Copas (con trofeos y podio) y Contrarreloj con el fantasma de tu mejor tiempo.
-  - **Eliminación**: cada pocos segundos el último queda fuera.
-  - **Batalla de globos** en una arena: cada golpe revienta un globo y gana quien conserve más.
-  - Todos los circuitos se pueden correr en **espejo** o en sentido **inverso**.
+  - **Eliminación**: cada pocos segundos el último queda fuera. **Acrobacias**: gana quien sume más puntos con trucos y derrapes.
+  - **Más modos**: Batalla de globos y Fiebre del plátano en arenas, **Circuito sorpresa** (un circuito nuevo generado al azar cada vez),
+    **Reto diario** (una carrera con regla especial cada día, con racha) y duelos contra un **jefe** gigante por copa.
+  - Todos los circuitos se pueden correr en **espejo** o en sentido **inverso**, y de día, al **atardecer** o de **noche** (con faros y fuegos artificiales).
+  - En contrarreloj hay **medallas** de bronce, plata y oro por circuito, con una liebre dorada que marca el ritmo del oro.
 - **5 rivales con IA** (esquivan, usan objetos, hacen trucos y se adaptan a la dificultad: Fácil / Normal / Difícil) y un
   **rival personal** que te reta en cada carrera y ajusta su nivel al tuyo. Acabar por delante da premio extra.
 - **9 power-ups**: Turbo Plátano, Coco Misil, Cáscara, Escudo Hoja, Golpe de Pecho, Furia Gorila, Rayo (encoge a los rivales),
@@ -34,8 +38,12 @@ Es una **PWA**: se instala desde el navegador y después funciona **sin conexió
 - **Obstáculos vivos** por mapa (barriles, cangrejos, géiseres de lava, pingüinos, robots, estrellas) y **clima**
   (chubascos con rayos, ventisca, meteoritos, estrellas fugaces).
 - **Gráficos estilo cómic**: contorno oscuro, resplandor (bloom), sombras reales, cielo con nubes, montañas iluminadas,
-  agua con oleaje, reflejos y espuma en la orilla. La **calidad automática** baja sola los efectos si el móvil va justo.
+  agua con oleaje, reflejos y espuma en la orilla. Cuatro niveles (**Bajos, Medios, Altos y Ultra**), **calidad automática** que baja
+  sola los efectos si el móvil va justo, **ahorro de batería** (30 imágenes por segundo) y contador de FPS.
 - **Controles configurables**: tamaño y opacidad de los botones, modo zurdo o dirección inclinando el móvil.
+  **Ayudas de conducción** opcionales: dirección asistida y derrape automático.
+- **Solo horizontal**: la app y la PWA instalada están bloqueadas en horizontal; en el navegador se pasa a pantalla completa y,
+  si el móvil está en vertical, se pide girarlo.
 - **Sonido** generado por código (sin archivos de audio): música por mapa, voces de gorila, ambiente, motores rivales y vibración.
 - **Idiomas**: español e inglés (Ajustes → Idioma).
 
@@ -78,7 +86,8 @@ El APK de Android se compila solo en GitHub Actions cada vez que cambia el juego
 - `js/main.js` — menús, HUD, ajustes, repetición, modo foto y bucle principal.
 - `js/race.js` — física, IA, power-ups, cámara, rival y fantasma.
 - `js/extras.js` — atajos, corrientes y control de altura del ala delta.
-- `js/rules.js` — reglas de Eliminación y Batalla de globos. `js/replay.js` — grabación y repetición.
+- `js/variants.js` — hora del día (atardecer, noche) y generador del circuito sorpresa. `js/daily.js` — reto diario. `js/boss.js` — jefes.
+- `js/rules.js` — reglas de Eliminación, Batalla de globos, Fiebre del plátano y Acrobacias. `js/replay.js` — grabación y repetición.
 - `js/track.js` — trazado con desnivel, terreno, cielo, agua/lava y elementos de pista (también en espejo e inverso).
 - `js/scenery.js` — túnel, gradas, banderas, vallas, farolas, fauna y monumentos.
 - `js/world.js` — clima, obstáculos vivos, ambiente submarino, marcas de derrape y estelas.
