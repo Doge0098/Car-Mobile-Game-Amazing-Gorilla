@@ -11,6 +11,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrapA = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const DRIFT_COLORS = [0xffffff, 0x38b6ff, 0xff9a1a, 0xe04dff];
 const TRICK_T = 0.55, THROW_T = 0.4;
+// estela por defecto: { color de la cinta, sparks: chispas del escape, rainbow: recorre el arcoíris }
+const FIRE_TRAIL = { color: 0xffa030, sparks: [0xff7a1a, 0xffe45a] };
+const _hue = new THREE.Color();
+const hueHex = h => _hue.setHSL(h - Math.floor(h), 1, 0.56).getHex();
 
 class Racer {
   constructor(race, slot, char, kart, color, isPlayer) {
@@ -19,6 +23,12 @@ class Racer {
     const ac = isPlayer ? char.stats.accel + kart.stats.accel : 7;
     const hd = isPlayer ? char.stats.handling + kart.stats.handling : 7;
     this.maxSpeed = 50 + sp * 1.7; this.accel = 20 + ac * 2.2; this.turnRate = 1.75 + hd * 0.07; this.grip = 6 + hd * 0.4;
+    this.boostK = 1; // multiplicador de la duración de los impulsos
+    // solo el jugador: mejoras del garaje y personalización
+    const tune = isPlayer && race.playerTune;
+    if (tune) for (const k of ['maxSpeed', 'accel', 'turnRate', 'grip', 'boostK']) this[k] += tune[k] || 0;
+    this.hat = (isPlayer && race.playerHat) || null; this.wheels = (isPlayer && race.playerWheel) || null;
+    this.trailDef = (isPlayer && race.playerTrail) || FIRE_TRAIL;
 
     const tr = race.track, g = tr.grid(slot);
     this.x = g.x; this.z = g.z; this.h = g.h; this.idx = g.idx; this.y = tr.yAt(g.x, g.z, g.idx);
@@ -44,8 +54,8 @@ class Racer {
     this.root = new THREE.Group();
     this.pitchG = new THREE.Group(); this.root.add(this.pitchG);
     this.tilt = new THREE.Group(); this.pitchG.add(this.tilt);
-    this.kart = makeKart(kart, color); this.tilt.add(this.kart);
-    this.gorilla = mountGorilla(this.kart, makeGorilla(char));
+    this.kart = makeKart(kart, color, null, this.wheels); this.tilt.add(this.kart);
+    this.gorilla = mountGorilla(this.kart, makeGorilla(char, null, false, this.hat));
     this.tilt.add(this.gorilla);
     this.rigs = makeModeRigs(); this.tilt.add(this.rigs.glider, this.rigs.boat, this.rigs.sub);
     this.outlines = []; this.olOn = true; this.tilt.traverse(o => { if (o.userData.isOutline) this.outlines.push(o); });
@@ -59,7 +69,7 @@ class Racer {
     this.trail = new Trail(); race.scene.add(this.trail.mesh); this.trail.reset(this.x, this.y, this.z);
   }
 
-  boost(t) { this.boostT = Math.max(this.boostT, t); }
+  boost(t) { this.boostT = Math.max(this.boostT, t * this.boostK); }
 
   // by: corredor que provoca el golpe (para contar los golpes dados); sin él es un obstáculo del mapa
   hit(by) {
@@ -336,8 +346,8 @@ class Racer {
 
     // estela luminosa
     const f = [Math.sin(this.h), Math.cos(this.h)], l = [Math.cos(this.h), -Math.sin(this.h)];
-    const glow = this.boostT > 0 || this.furyT > 0;
-    this.trail.push(this.x - f[0] * 1.9, y + this.hopY + 0.75, this.z - f[1] * 1.9, l[0], l[1], this.furyT > 0 ? 0xc04dff : 0xffa030, glow, race.glowK * 0.7);
+    const glow = this.boostT > 0 || this.furyT > 0, td = this.trailDef;
+    this.trail.push(this.x - f[0] * 1.9, y + this.hopY + 0.75, this.z - f[1] * 1.9, l[0], l[1], this.furyT > 0 ? 0xc04dff : td.rainbow ? hueHex(t * 0.8) : td.color, glow, race.glowK * 0.7);
 
     // lo demás solo si está cerca de la cámara
     const cam = race.camPos, dd = (cam.x - this.x) ** 2 + (cam.z - this.z) ** 2;
@@ -374,7 +384,7 @@ class Racer {
       for (const sd of [-0.4, 0.4]) {
         const [px, pz] = rear(sd, 2.3);
         fx.add.emit(px, y + 1.0 + this.hopY, pz, -f[0] * 14 + (Math.random() - 0.5) * 3, (Math.random() - 0.3) * 3, -f[1] * 14 + (Math.random() - 0.5) * 3,
-          Math.random() < 0.5 ? 0xff7a1a : 0xffe45a, 12, 0.3, 0, -0.5);
+          td.rainbow ? hueHex(Math.random()) : td.sparks[Math.random() < 0.5 ? 0 : 1], 12, 0.3, 0, -0.5);
       }
     }
     if (this.off && this.speed > 12 && ground && Math.random() < 0.7) {
@@ -415,18 +425,19 @@ export class Race {
     this.marks = new SkidMarks(this.quality < 0.7 ? 300 : 700); this.scene.add(this.marks.mesh);
 
     const pc = charById(this.playerChar), pk = kartById(this.playerKart);
-    this.racers = [];
+    this.racers = []; this.hornCd = 0;
     const solo = this.mode === 'time';
-    const total = solo ? 1 : RACERS;
+    // rivales: opts.rivals = [{ char, kart, color }] (ids e índice de color); si no se dan, los de siempre
     const others = CHARACTERS.filter(c => c.id !== pc.id);
+    const lineup = solo ? [] : this.rivals || others.slice(0, RACERS - 1).map((c, i) => ({ char: c.id, kart: KARTS[(i * 2 + 1) % KARTS.length].id, color: 1 + (i * 3) % (KART_COLORS.length - 1) }));
+    const total = lineup.length + 1;
     for (let i = 0; i < total; i++) {
       const isP = i === total - 1;
       const slot = solo ? 0 : i;
       if (isP) { this.racers.push(new Racer(this, slot, pc, pk, KART_COLORS[this.playerColor] || null, true)); this.racers[i].colorIdx = this.playerColor; }
       else {
-        const ch = others[i % others.length], kd = KARTS[(i * 2 + 1) % KARTS.length];
-        const ci = 1 + (i * 3) % (KART_COLORS.length - 1);
-        this.racers.push(new Racer(this, slot, ch, kd, KART_COLORS[ci], false)); this.racers[i].colorIdx = ci;
+        const rv = lineup[i];
+        this.racers.push(new Racer(this, slot, charById(rv.char), kartById(rv.kart), KART_COLORS[rv.color] || null, false)); this.racers[i].colorIdx = rv.color;
       }
     }
     this.player = this.racers[total - 1];
@@ -442,7 +453,7 @@ export class Race {
       if (this.ghostData && this.ghostData.length > 6) {
         const gm = new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.32, depthWrite: false });
         this.ghost = new THREE.Group(); this.ghostIdx = this.player.idx;
-        const gk = makeKart(pk, null, gm), gg = mountGorilla(gk, makeGorilla(pc, gm));
+        const gk = makeKart(pk, null, gm, this.playerWheel), gg = mountGorilla(gk, makeGorilla(pc, gm, false, this.playerHat));
         animateGorilla(gg, 0, {}); this.ghost.add(gk, gg);
         this.scene.add(this.ghost);
       }
@@ -567,6 +578,18 @@ export class Race {
     if (r.isPlayer) this.emit('used', it);
   }
 
+  // Bocina del jugador: suena, saluda y los rivales de delante miran atrás
+  honk(r) {
+    if (this.hornCd > 0 || r.spinT > 0) return;
+    this.hornCd = 0.5; sfx.horn?.(this.playerHorn);
+    r.tauntT = Math.max(r.tauntT, 0.45);
+    for (const o of this.racers) {
+      const dp = o.prog - r.prog;
+      if (o !== r && dp > 0 && dp < 9 && o.spinT <= 0) { o.lookT = 0.85; o.lookDir = r.lat >= o.lat ? 1 : -1; o.lookCd = 3; }
+    }
+    this.emit('horn');
+  }
+
   aiControl(r, dt) {
     const tr = this.track, N = tr.N, S = tr.samples;
     const look = Math.round(5 + Math.max(0, r.speed) * 0.2);
@@ -634,13 +657,13 @@ export class Race {
     const order = this.ranking(), extra = this.state === 'finished' ? this.stateT : 0;
     return order.map((r, i) => ({
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
-      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st,
+      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
     }));
   }
 
   update(dt, input) {
     const tr = this.track, N = tr.N, S = tr.samples;
-    this.t += dt; this.stateT += dt; this.voiceCd -= dt;
+    this.t += dt; this.stateT += dt; this.voiceCd -= dt; this.hornCd -= dt;
     const p = this.player, driftEdge = input.drift && !this.prevDrift;
 
     if (this.state === 'intro') {
@@ -674,6 +697,7 @@ export class Race {
       else if (r.isPlayer && !r.finished) {
         ctl = { steer: input.steer, accel: !input.brake, brake: input.brake, drift: input.drift, trick: driftEdge };
         if (input.itemPressed && r.item) this.useItem(r);
+        else if ((input.itemPressed && r.rolling <= 0) || input.hornPressed) this.honk(r); // sin objeto, el botón toca la bocina
       } else ctl = this.aiControl(r, dt);
       if (!ctl) { r.speed = 0; r.vx = r.vz = 0; r.t += dt; } else r.step(dt, ctl);
     }

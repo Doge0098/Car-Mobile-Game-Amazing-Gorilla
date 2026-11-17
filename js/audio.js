@@ -222,6 +222,16 @@ const S = {
 export const sfx = {};
 for (const k in S) sfx[k] = (pan = 0, v = 1) => { if (live()) S[k](bus(pan, v)); };
 
+// ---------- Bocinas del jugador (id de HORNS en shop.js): sfx.horn(tipo, pan = 0, vol = 1) ----------
+const HORN = {
+  clasica(d) { for (const t of [0, 0.17]) { tone(440, 0.13, 'square', 0.15, d, t); tone(554, 0.13, 'square', 0.11, d, t); } },                        // ¡mec, mec!
+  camion(d) { tone(147, 0.62, 'sawtooth', 0.2, d, 0, 0, 0.03); tone(185, 0.62, 'sawtooth', 0.16, d, 0, 0, 0.03); tone(73.5, 0.62, 'square', 0.1, d, 0, 0, 0.03); }, // dos trompetas graves
+  payaso(d) { for (const t of [0, 0.21]) { tone(540, 0.16, 'sawtooth', 0.15, d, t, 300); tone(270, 0.16, 'square', 0.1, d, t, 150); noise(0.05, 0.08, 'bandpass', 900, 0, d, t); } }, // ¡moc-moc!
+  melodia(d) { [[392, 0, 0.09], [392, 0.11, 0.09], [392, 0.22, 0.09], [523, 0.33, 0.2], [659, 0.56, 0.3]].forEach(([f, t, l]) => { tone(f, l, 'square', 0.12, d, t); tone(f * 1.26, l, 'square', 0.07, d, t); }); }, // la cu-ca-ra-cha
+  espacial(d) { tone(280, 0.5, 'sine', 0.2, d, 0, 1900, 0.01, 19, 90); tone(1900, 0.32, 'triangle', 0.07, d, 0.12, 480); noise(0.3, 0.05, 'bandpass', 3200, 700, d, 0.05); },
+};
+sfx.horn = (kind = 'clasica', pan = 0, v = 1) => { if (live()) (HORN[kind] || HORN.clasica)(bus(pan, v)); };
+
 // ---------- Voces de gorila: sierra + soplo -> 2 formantes vocales, con contorno de tono por sílaba ----------
 const VOW = { u: [340, 800], o: [480, 950], a: [800, 1300], e: [520, 1850], i: [330, 2400] };
 // s: sílabas [inicio, duración, tono inicial, tono pico, tono final, vocal inicial, vocal final, amplitud]

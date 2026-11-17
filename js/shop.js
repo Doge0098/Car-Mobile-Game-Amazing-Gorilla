@@ -60,12 +60,12 @@ export const HORNS = [
   { id: 'espacial', name: 'Espacial', icon: '🛸', price: 250, desc: 'Sonido de otro planeta.' },
 ];
 
-// Pestañas de personalización del garaje: lista, campos de la partida (comprados / elegido) y si se ve en el escaparate
+// Pestañas de personalización del garaje: lista, campos de la partida (comprados / elegido) y nota de ayuda
 export const SHOP = [
-  { tab: 'hats', label: 'Sombreros', list: HATS, owned: 'hats', cur: 'hat', title: 'Sombreros' },
-  { tab: 'wheels', label: 'Ruedas', list: WHEELS, owned: 'wheels', cur: 'wheel', title: 'Ruedas' },
-  { tab: 'trails', label: 'Estelas', list: TRAILS, owned: 'trails', cur: 'trail', title: 'Estelas del turbo' },
-  { tab: 'horns', label: 'Bocinas', list: HORNS, owned: 'horns', cur: 'horn', title: 'Bocinas' },
+  { tab: 'hats', label: 'Sombreros', list: HATS, owned: 'hats', cur: 'hat', hint: 'Lo llevarás en carrera, en el podio y en tu fantasma.' },
+  { tab: 'wheels', label: 'Ruedas', list: WHEELS, owned: 'wheels', cur: 'wheel', hint: 'Valen para todos tus coches.' },
+  { tab: 'trails', label: 'Estelas', list: TRAILS, owned: 'trails', cur: 'trail', hint: 'La estela que dejas cuando llevas turbo.' },
+  { tab: 'horns', label: 'Bocinas', list: HORNS, owned: 'horns', cur: 'horn', hint: 'En carrera: pulsa OBJETO cuando no lleves ninguno (tecla H).' },
 ];
 
 export const byId = (list, id) => list.find(x => x.id === id) || list[0];

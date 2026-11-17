@@ -13,6 +13,10 @@ export const CHARACTERS = [
     stats: { speed: 4, accel: 3, handling: 5 }, price: 550, desc: 'Azul eléctrico, derrapa como nadie.' },
   { id: 'mambo', voice: 0.8, name: 'Rey Mambo', fur: 0xd99a1c, skin: 0xffe2a8, acc: 'crown', accColor: 0xffd700,
     stats: { speed: 5, accel: 4, handling: 3 }, price: 900, desc: 'El rey dorado de la selva.' },
+  { id: 'kiwi', voice: 1.42, name: 'Kiwi', fur: 0x6fbf3a, skin: 0xe6f0b0, acc: 'goggles', accColor: 0x9a4dff,
+    stats: { speed: 3, accel: 5, handling: 4 }, price: 700, desc: 'Pequeña, verde y con mucha chispa.' },
+  { id: 'titan', voice: 0.62, name: 'Titán', fur: 0x3a3f4c, skin: 0x8f95a3, back: 0xc9d2e0, acc: 'bandana', accColor: 0x35e08a,
+    stats: { speed: 5, accel: 3, handling: 4 }, price: 1100, desc: 'Espalda plateada: pesado, pero imparable.' },
 ];
 
 export const KARTS = [
@@ -26,6 +30,10 @@ export const KARTS = [
     stats: { speed: 5, accel: 3, handling: 3 }, price: 600 },
   { id: 'aurora', name: 'Platillo Aurora', color: 0xc04dff, color2: 0x22e6ff, shape: 4,
     stats: { speed: 5, accel: 4, handling: 4 }, price: 1200 },
+  { id: 'pina', name: 'Piña Turbo', color: 0xffb21f, color2: 0x2fae4a, shape: 5,
+    stats: { speed: 4, accel: 5, handling: 3 }, price: 800 },
+  { id: 'tiburon', name: 'Tiburón Feroz', color: 0x4f86c0, color2: 0xf2f6ff, shape: 6,
+    stats: { speed: 5, accel: 3, handling: 5 }, price: 1100 },
 ];
 
 export const KART_COLORS = [null, 0xff3b4a, 0x29e06b, 0x31b6ff, 0xff7a1a, 0xc04dff, 0xff5ec4, 0xf5f5f5, 0x22e6d0];

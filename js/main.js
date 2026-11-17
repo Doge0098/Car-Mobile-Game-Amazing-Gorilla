@@ -1,6 +1,6 @@
 // Amazing Gorilla Racing — arranque, menús, HUD y bucle principal.
 import * as THREE from './vendor/three.module.min.js';
-import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
+import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, RACERS, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
 import { save, loadSave, persist, resetSave } from './save.js';
 import * as A from './audio.js';
 import { initInput, input, pollInput, consumePresses, enableTilt } from './input.js';
@@ -11,6 +11,7 @@ import { makeGorilla, makeKart, mountGorilla, animateGorilla, animateKart, blobS
 import { setOutline, setOutlineRes } from './outline.js';
 import { Post } from './post.js';
 import { Podium } from './podium.js';
+import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgradeTune, byId } from './shop.js';
 import { MISSIONS, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
@@ -79,15 +80,44 @@ function applyShowOffset() {
   menuCam.fov = w < h ? 74 : 42;
   menuCam.updateProjectionMatrix();
 }
-function setShowModel(charId, kartId, colorIdx) {
+let showTrail = null, showTrailDef = null; // vista previa de la estela en el garaje
+const _hue = new THREE.Color(), hueHex = h => _hue.setHSL(h - Math.floor(h), 1, 0.56).getHex();
+function setShowModel(charId, kartId, colorIdx, hat = null, wheels = null) {
+  const ry = showModel ? showModel.rotation.y : 0;
   if (showModel) menuScene.remove(showModel);
-  showModel = new THREE.Group();
-  showKart = makeKart(kartById(kartId), KART_COLORS[colorIdx] || null);
-  showGorilla = mountGorilla(showKart, makeGorilla(charById(charId)));
+  showModel = new THREE.Group(); showModel.rotation.y = ry;
+  showKart = makeKart(kartById(kartId), KART_COLORS[colorIdx] || null, null, wheels);
+  showGorilla = mountGorilla(showKart, makeGorilla(charById(charId), null, false, hat));
   showModel.add(showKart, showGorilla, blobShadow());
   menuScene.add(showModel);
 }
-const refreshShow = () => setShowModel(save.char, save.kart, save.color);
+const refreshShow = () => setShowModel(save.char, save.kart, save.color, save.hat, save.wheel);
+// Cinta de muestra de la estela: opaca (no aditiva) para que se distinga sobre el fondo claro del escaparate
+const ST_N = 14;
+function makeShowTrail() {
+  const g = new THREE.BufferGeometry(), idx = [];
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(ST_N * 6), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(ST_N * 8), 4));
+  for (let i = 0; i < ST_N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  g.setIndex(idx);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  m.frustumCulled = false; m.renderOrder = 3;
+  return m;
+}
+function updateShowTrail() {
+  if (!showTrailDef) { if (showTrail) showTrail.visible = false; return; }
+  if (!showTrail) showTrail = makeShowTrail();
+  if (showTrail.parent !== showModel) showModel.add(showTrail);
+  showTrail.visible = true;
+  const P = showTrail.geometry.attributes.position, C = showTrail.geometry.attributes.color, d = showTrailDef;
+  for (let i = 0; i < ST_N; i++) {
+    const f = 1 - i / (ST_N - 1), w = 0.9 * (0.3 + 0.7 * f), x = Math.sin(tGlobal * 7 - i * 0.55) * 0.035 * i, y = 0.8 + Math.sin(tGlobal * 5 - i * 0.4) * 0.02 * i, z = -2.3 - i * 0.25;
+    if (d.rainbow) _hue.setHSL((tGlobal * 0.5 + i * 0.07) % 1, 1, 0.56); else _hue.set(i < 3 ? d.sparks[1] : d.color);
+    P.setXYZ(i * 2, x + w, y, z); P.setXYZ(i * 2 + 1, x - w, y, z);
+    C.setXYZW(i * 2, _hue.r, _hue.g, _hue.b, f); C.setXYZW(i * 2 + 1, _hue.r, _hue.g, _hue.b, f);
+  }
+  P.needsUpdate = C.needsUpdate = true;
+}
 
 // ---------- Pantallas ----------
 let screen = 'title';
@@ -104,6 +134,7 @@ function show(name, overlay) {
   if (el) el.classList.add('active');
   if (overlay) $('hud').classList.toggle('active', overlay === 'hud');
   screen = name;
+  if (name !== 'garage') showTrailDef = null;
   placeShow();
   syncWallet();
 }
@@ -144,6 +175,13 @@ const cup1Unlocked = () => Object.keys(save.trophies).some(k => k.startsWith('pl
 const trackUnlocked = t => t.cup === 0 || cup1Unlocked();
 const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
 
+// Parrilla de rivales al azar: [{ char, kart, color }] (en una copa se mantiene durante sus carreras)
+function makeLineup(n) {
+  const mix = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const chars = mix(CHARACTERS.filter(c => c.id !== save.char)), karts = mix(KARTS.slice()), c0 = Math.floor(Math.random() * 8);
+  return Array.from({ length: n }, (_, i) => ({ char: chars[i % chars.length].id, kart: karts[i % karts.length].id, color: 1 + (c0 + i * 3) % (KART_COLORS.length - 1) }));
+}
+
 function disposeRace() {
   stopEngine(); A.stopAmbience?.(); A.setTunnel?.(false); A.setMusicIntensity?.(0);
   rivalOut.length = 0; A.updateRivalEngines?.(rivalOut);
@@ -176,6 +214,8 @@ function startRace(trackId) {
     race = new Race({
       scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: diff(), ...gfx,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
+      playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: upgradeTune(save),
+      rivals: cupState ? cupState.rivals : makeLineup(RACERS - 1),
       ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; fpsAcc = 0; fpsN = 0;
@@ -335,7 +375,7 @@ function showResults() {
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
     if (mode === 'cup') {
-      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color }; });
+      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels }; });
       sub = `${cupState.cup.name} · Carrera ${cupState.i + 1}/3 · ${currentTrack.name}`;
     }
     for (const r of res) {
@@ -356,7 +396,7 @@ function showResults() {
   $('r-sub').textContent = sub;
   $('r-reward').textContent = rewardTxt;
   earn(reward); persist(); awardAchievements();
-  if (mode === 'race') startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, isPlayer: r.isPlayer })), me.pos, false);
+  if (mode === 'race') startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
   else show('results');
 }
 
@@ -460,18 +500,32 @@ function buildCups() {
       `<p>${cup.tracks.map(id => trackById(id).name).join(' · ')}</p><p>${tr ? ['🏆 Oro', '🥈 Plata', '🥉 Bronce'][tr - 1] + ' en ' + diff().name : ok ? '3 carreras · sin trofeo aún' : 'Gana un trofeo en la Copa Plátano'}</p>`;
     c.onclick = () => {
       if (!ok) { sfx.deny(); toast('Gana un trofeo en la Copa Plátano'); return; }
-      sfx.ui(); mode = 'cup'; cupState = { cup, i: 0, pts: {}, ride: {} }; startRace(cup.tracks[0]);
+      sfx.ui(); mode = 'cup'; cupState = { cup, i: 0, pts: {}, ride: {}, rivals: makeLineup(RACERS - 1) }; startRace(cup.tracks[0]);
     };
     box.appendChild(c);
   });
 }
 
 // ---------- Garaje ----------
+// Pestañas con lista de compra y elección (gorilas, coches y la tienda de shop.js), además de pintura y mejoras
+const GARAGE_LISTS = { chars: { list: CHARACTERS, owned: 'chars', cur: 'char' }, karts: { list: KARTS, owned: 'karts', cur: 'kart' } };
+for (const s of SHOP) GARAGE_LISTS[s.tab] = s;
+const GARAGE_TABS = [['chars', 'Gorilas'], ['karts', 'Coches'], ['colors', 'Color'], ['upgrades', 'Mejoras'], ...SHOP.map(s => [s.tab, s.label])];
 let gTab = 'chars', gSel = null;
 const STAT_NAMES = { speed: 'Velocidad', accel: 'Aceleración', handling: 'Manejo' };
+const chipDot = it => (it.icon ? `<span class="dot ico">${it.icon}</span>` : `<span class="dot" style="background:${it.dot || hex(it.fur != null ? it.fur : it.color)}"></span>`);
+function buildGarageTabs() {
+  const box = $('garage-tabs'); box.innerHTML = '';
+  for (const [id, label] of GARAGE_TABS) {
+    const t = document.createElement('button'); t.className = 'tab'; t.dataset.tab = id; t.textContent = label;
+    t.onclick = () => { gTab = id; gSel = null; sfx.ui(); refreshShow(); buildGarage(); t.scrollIntoView({ block: 'nearest', inline: 'center' }); };
+    box.appendChild(t);
+  }
+}
 function buildGarage() {
-  document.querySelectorAll('#garage-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === gTab));
-  const strip = $('garage-strip'); strip.innerHTML = '';
+  document.querySelectorAll('#garage-tabs .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === gTab); if (t.dataset.tab === gTab) t.scrollIntoView({ block: 'nearest', inline: 'nearest' }); });
+  const strip = $('garage-strip'), act = $('g-action'); strip.innerHTML = '';
+  act.classList.remove('hidden'); act.disabled = false; $('g-stats').innerHTML = ''; showTrailDef = null;
   if (gTab === 'colors') {
     KART_COLORS.forEach((c, i) => {
       const b = document.createElement('button'); b.className = 'chip' + (i === save.color ? ' sel equipped' : '');
@@ -480,39 +534,66 @@ function buildGarage() {
       strip.appendChild(b);
     });
     $('g-name').textContent = 'Pintura'; $('g-desc').textContent = 'Elige el color de tu coche. ¡Es gratis!';
-    $('g-stats').innerHTML = ''; $('g-action').classList.add('hidden');
+    act.classList.add('hidden');
     return;
   }
-  $('g-action').classList.remove('hidden');
-  const isC = gTab === 'chars', list = isC ? CHARACTERS : KARTS, owned = isC ? save.chars : save.karts, cur = isC ? save.char : save.kart;
-  if (!gSel || !list.includes(gSel)) gSel = list.find(x => x.id === cur);
+  if (gTab === 'upgrades') {
+    if (!UPGRADES.includes(gSel)) gSel = UPGRADES[0];
+    for (const u of UPGRADES) {
+      const b = document.createElement('button'); b.className = 'chip' + (u === gSel ? ' sel' : '');
+      b.innerHTML = `<span class="dot ico">${u.icon}</span>${u.name}<small>${fill('Nivel {lv}/{max}', { lv: upgradeLevel(save, u.id), max: UPGRADE_MAX })}</small>`;
+      b.onclick = () => { gSel = u; sfx.ui(); buildGarage(); };
+      strip.appendChild(b);
+    }
+    const lv = upgradeLevel(save, gSel.id);
+    $('g-name').textContent = gSel.name; $('g-desc').textContent = gSel.desc;
+    $('g-stats').innerHTML = `<div class="pips">${Array.from({ length: UPGRADE_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</div>` +
+      `<small class="note">${fill('Nivel {lv} de {max} · solo para tu coche', { lv, max: UPGRADE_MAX })}</small>`;
+    if (lv >= UPGRADE_MAX) { act.textContent = '✔ Nivel máximo'; act.disabled = true; } else act.textContent = fill('Mejorar por 🍌 {price}', { price: upgradePrice(lv) });
+    return;
+  }
+  const L = GARAGE_LISTS[gTab], list = L.list, owned = save[L.owned], cur = save[L.cur];
+  strip.classList.toggle('shop', !!L.hint); // en la tienda, lo no comprado se ve con su color real
+  if (!gSel || !list.includes(gSel)) gSel = byId(list, cur);
   for (const it of list) {
     const has = owned.includes(it.id), b = document.createElement('button');
     b.className = 'chip' + (it === gSel ? ' sel' : '') + (it.id === cur ? ' equipped' : '') + (has ? '' : ' locked');
-    b.innerHTML = `<span class="dot" style="background:${hex(isC ? it.fur : it.color)}"></span>${it.name}${has ? '' : `<small>🍌 ${it.price}</small>`}`;
+    b.innerHTML = `${chipDot(it)}${it.name}${has ? '' : `<small>🍌 ${it.price}</small>`}`;
     b.onclick = () => { gSel = it; sfx.ui(); showSpin = 2.5; previewSel(); buildGarage(); };
     strip.appendChild(b);
   }
   $('g-name').textContent = gSel.name;
-  $('g-desc').textContent = isC ? gSel.desc : 'Combina sus estadísticas con las de tu gorila.';
-  $('g-stats').innerHTML = Object.keys(STAT_NAMES).map(k => `<div class="stat"><span>${STAT_NAMES[k]}</span><div class="bar"><i style="width:${gSel.stats[k] * 20}%"></i></div></div>`).join('');
-  const has = owned.includes(gSel.id), act = $('g-action');
-  act.disabled = false;
+  $('g-desc').textContent = gSel.desc || 'Combina sus estadísticas con las de tu gorila.';
+  if (gSel.stats) $('g-stats').innerHTML = Object.keys(STAT_NAMES).map(k => `<div class="stat"><span>${STAT_NAMES[k]}</span><div class="bar"><i style="width:${gSel.stats[k] * 20}%"></i></div></div>`).join('');
+  else if (L.hint) $('g-stats').innerHTML = `<small class="note">${L.hint}</small>`;
+  if (gTab === 'trails') showTrailDef = gSel;
   if (gSel.id === cur) { act.textContent = '✔ Elegido'; act.disabled = true; }
-  else if (has) act.textContent = 'Elegir';
-  else act.textContent = `Comprar por 🍌 ${gSel.price}`;
+  else if (owned.includes(gSel.id)) act.textContent = 'Elegir';
+  else act.textContent = fill('Comprar por 🍌 {price}', gSel);
 }
+// Muestra en el escaparate lo que se está mirando (aunque no esté comprado); las bocinas se prueban de oído
 function previewSel() {
-  if (gTab === 'chars') setShowModel(gSel.id, save.kart, save.color);
-  else if (gTab === 'karts') setShowModel(save.char, gSel.id, save.color);
+  const o = { char: save.char, kart: save.kart, hat: save.hat, wheel: save.wheel }, L = GARAGE_LISTS[gTab];
+  if (L && gSel) o[L.cur] = gSel.id;
+  setShowModel(o.char, o.kart, save.color, o.hat, o.wheel);
+  if (gTab === 'horns') sfx.horn(gSel.id);
 }
 function garageAction() {
-  const isC = gTab === 'chars', owned = isC ? save.chars : save.karts;
-  if (!owned.includes(gSel.id)) {
-    if (save.bananas < gSel.price) { sfx.deny(); toast(`Te faltan ${gSel.price - save.bananas} 🍌`); return; }
-    save.bananas -= gSel.price; owned.push(gSel.id); sfx.buy();
-  } else sfx.ui();
-  if (isC) save.char = gSel.id; else save.kart = gSel.id;
+  if (gTab === 'upgrades') {
+    const lv = upgradeLevel(save, gSel.id), price = upgradePrice(lv);
+    if (lv >= UPGRADE_MAX) return;
+    if (save.bananas < price) { sfx.deny(); toast(fill('Te faltan {n} 🍌', { n: price - save.bananas })); return; }
+    save.bananas -= price; save.upgrades[gSel.id] = lv + 1; sfx.buy();
+  } else {
+    const L = GARAGE_LISTS[gTab]; if (!L) return;
+    const owned = save[L.owned];
+    if (!owned.includes(gSel.id)) {
+      if (save.bananas < gSel.price) { sfx.deny(); toast(fill('Te faltan {n} 🍌', { n: gSel.price - save.bananas })); return; }
+      save.bananas -= gSel.price; owned.push(gSel.id); sfx.buy();
+    } else sfx.ui();
+    save[L.cur] = gSel.id;
+    if (gTab === 'horns') sfx.horn(gSel.id);
+  }
   persist(); refreshShow(); showPound = 1.2; showSpin = 4; buildGarage();
   syncWallet(); awardAchievements();
 }
@@ -578,13 +659,13 @@ function wireUi() {
     sfx.ui(); const g = b.dataset.go;
     if (g === 'race' || g === 'time') { mode = g; buildTracks(); show('tracks'); }
     else if (g === 'cups') { buildCups(); show('cups'); }
-    else if (g === 'garage') { gSel = null; buildGarage(); show('garage'); }
+    else if (g === 'garage') { gSel = null; show('garage'); buildGarage(); }
     else if (g === 'settings') { buildSettings(); show('settings'); }
     else if (g === 'meta') { mTab = 'ach'; buildMeta(); show('meta'); }
   });
   document.querySelectorAll('#meta-tabs .tab').forEach(t => t.onclick = () => { mTab = t.dataset.mtab; sfx.ui(); buildMeta(); });
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { sfx.back(); refreshShow(); show('menu'); });
-  document.querySelectorAll('#garage-tabs .tab').forEach(t => t.onclick = () => { gTab = t.dataset.tab; gSel = null; sfx.ui(); refreshShow(); buildGarage(); });
+  buildGarageTabs();
   $('g-action').onclick = garageAction;
   $('podium-next').onclick = endPodium;
   $('s-podium').addEventListener('pointerup', e => { if (e.target.id !== 'podium-next' && podiumT > 2) endPodium(); });
@@ -678,6 +759,7 @@ function frame(now) {
       const idle = Math.sin(tGlobal * 0.7) > 0.86;
       animateGorilla(showGorilla, tGlobal, { steer: Math.sin(tGlobal * 1.3) * 0.5, mode: showPound > 0 ? 'pound' : idle ? 'cheer' : 'drive', face: showPound > 0 || idle ? 'happy' : 'neutral', speedK: 0.4, dt });
       animateKart(showKart, dt, 6, Math.sin(tGlobal * 1.3) * 0.5);
+      updateShowTrail();
     }
     render(menuScene, menuCam);
   }
@@ -699,4 +781,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
