@@ -41,8 +41,9 @@
     <button class="btn c1" data-go="race">🏁 Carrera rápida</button>
     <button class="btn c2" data-go="cups">🏆 Copas</button>
     <button class="btn c3" data-go="time">⏱️ Contrarreloj</button>
-    <button class="btn c4" data-go="garage">🦍 Garaje</button>
-    <button class="btn c5" data-go="settings">⚙️ Ajustes</button>
+    <button class="btn c4 half" data-go="garage">🦍 Garaje</button>
+    <button class="btn c7 half" data-go="meta">🏅 Misiones y logros</button>
+    <button class="btn c5 half" data-go="settings">⚙️ Ajustes</button>
     <button class="btn c6 hidden" id="btn-install">📲 Instalar juego</button>
   </nav>
 </section>
@@ -75,7 +76,7 @@
     <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
   </header>
   <div class="garage-panel">
-    <div class="tabs">
+    <div class="tabs" id="garage-tabs">
       <button class="tab active" data-tab="chars">Gorilas</button>
       <button class="tab" data-tab="karts">Coches</button>
       <button class="tab" data-tab="colors">Color</button>
@@ -90,6 +91,21 @@
       <button class="btn c1" id="g-action">Elegir</button>
     </div>
   </div>
+</section>
+
+<!-- MISIONES Y LOGROS -->
+<section id="s-meta" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Misiones y logros</h2>
+    <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
+  </header>
+  <div class="tabs" id="meta-tabs">
+    <button class="tab active" data-mtab="ach">Logros</button>
+    <button class="tab" data-mtab="missions">Misiones</button>
+    <button class="tab" data-mtab="stats">Estadísticas</button>
+  </div>
+  <div class="meta-body" id="meta-body"></div>
 </section>
 
 <!-- AJUSTES -->
@@ -139,6 +155,7 @@
     <div class="hud-bananas">🍌 <b id="hud-bananas">0</b></div>
     <canvas id="minimap" width="140" height="140"></canvas>
   </div>
+  <div class="hud-missions" id="hud-missions"><h4>Misiones</h4><ul class="missions" id="hud-missions-list"></ul></div>
   <div class="hud-msg" id="hud-msg"></div>
   <div class="hud-warn hidden" id="hud-wrong">↩ ¡Sentido contrario!</div>
   <div class="hud-hint" id="hud-hint"></div>
@@ -160,6 +177,7 @@
 <section id="s-pause" class="screen modal">
   <div class="box">
     <h2>Pausa</h2>
+    <ul class="missions" id="p-missions"></ul>
     <button class="btn c1" id="p-resume">▶ Continuar</button>
     <button class="btn c3" id="p-restart">↻ Reiniciar</button>
     <button class="btn c5" id="p-quit">✕ Salir al menú</button>
@@ -180,7 +198,10 @@
   <div class="box wide">
     <h2 id="r-title">Resultados</h2>
     <p id="r-sub"></p>
-    <ol id="r-list" class="results"></ol>
+    <div class="r-body">
+      <ol id="r-list" class="results"></ol>
+      <ul class="missions" id="r-missions"></ul>
+    </div>
     <div class="reward" id="r-reward"></div>
     <div class="rowbtns">
       <button class="btn c3" id="r-retry">↻ Repetir</button>

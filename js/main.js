@@ -11,6 +11,7 @@ import { makeGorilla, makeKart, mountGorilla, animateGorilla, animateKart, blobS
 import { setOutline, setOutlineRes } from './outline.js';
 import { Post } from './post.js';
 import { Podium } from './podium.js';
+import { MISSIONS, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
 const $ = id => document.getElementById(id);
@@ -90,7 +91,7 @@ const refreshShow = () => setShowModel(save.char, save.kart, save.color);
 
 // ---------- Pantallas ----------
 let screen = 'title';
-const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0] };
+const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0] };
 function placeShow() {
   const o = OFFSETS[screen]; if (!o) return;
   const portrait = innerWidth < innerHeight;
@@ -104,11 +105,28 @@ function show(name, overlay) {
   if (overlay) $('hud').classList.toggle('active', overlay === 'hud');
   screen = name;
   placeShow();
-  document.querySelectorAll('.bananas').forEach(b => { b.textContent = save.bananas; });
+  syncWallet();
 }
+// Avisos: se muestran de uno en uno (los logros pueden llegar varios a la vez)
+const toastQ = [];
 function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200);
+  if (msg === toast.now || toastQ.includes(msg) || toastQ.length > 5) return;
+  toastQ.push(msg); if (!toast.now) nextToast();
+}
+function nextToast() {
+  const t = $('toast'), msg = toastQ.shift();
+  if (msg == null) { toast.now = null; return; }
+  toast.now = msg; t.textContent = msg; t.classList.add('show');
+  setTimeout(() => { t.classList.remove('show'); setTimeout(nextToast, 240); }, toastQ.length ? 1500 : 2200);
+}
+const syncWallet = () => document.querySelectorAll('.bananas').forEach(b => { b.textContent = save.bananas; });
+// Plátanos ganados (cuentan para las estadísticas)
+function earn(n) { save.bananas += n; addStat(save, 'earned', n); }
+// Comprueba los logros, los paga y los anuncia
+function awardAchievements() {
+  const fresh = checkAchievements(save);
+  for (const a of fresh) toast(fill('{icon} Logro: {name} · +{reward} 🍌', a));
+  if (fresh.length) { persist(); sfx.buy(); syncWallet(); }
 }
 
 // ---------- Estado de carrera ----------
@@ -117,6 +135,9 @@ let paused = false, mode = 'race', currentTrack = null, cupState = null, results
 let miniBg = null, rollIcon = 0, rollT = 0, lastHud = {};
 const podium = new Podium();
 let podiumAfter = null, podiumT = 0, rampHints = 0, fpsAcc = 0, fpsN = 0, fpsHinted = false, inTunnel = false;
+// misiones de la carrera en curso y su contexto (se reutiliza: sin basura por fotograma)
+let missions = [], missionT = 0;
+const mctx = { st: null, pos: 0, total: 0, time: 0, par: 0, finished: false, started: false };
 const rivalBuf = [{ pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }], rivalOut = [];
 
 const cup1Unlocked = () => Object.keys(save.trophies).some(k => k.startsWith('platano_'));
@@ -159,6 +180,10 @@ function startRace(trackId) {
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; fpsAcc = 0; fpsN = 0;
     hint('');
+    mctx.st = race.player.st; mctx.total = race.racers.length; mctx.par = parTime(mode, track.length, race.laps);
+    missions = pickMissions(mode, mctx.par); missionT = 0; syncMissions();
+    renderMissions($('hud-missions-list'), false);
+    $('hud-missions').classList.toggle('hidden', !missions.length);
     buildMinimap();
     $('hud-total').textContent = mode === 'time' ? '' : '/' + race.racers.length;
     $('hud-laps').textContent = race.laps;
@@ -177,6 +202,19 @@ function startRace(trackId) {
 function hudMsg(text, small) {
   const m = $('hud-msg'); m.textContent = text;
   m.className = 'hud-msg' + (small ? ' small' : ''); void m.offsetWidth; m.classList.add('show');
+}
+
+// ---------- Misiones de la carrera ----------
+function syncMissions() {
+  const p = race.player;
+  mctx.pos = p.pos; mctx.time = race.time; mctx.finished = p.finished; mctx.started = race.state === 'racing' || race.state === 'finished';
+  return updateMissions(missions, mctx);
+}
+// live: muestra el progreso («7/20») de las que aún no están decididas
+function renderMissions(el, live) {
+  el.innerHTML = missions.map(m => `<li class="${m.done ? 'ok' : m.failed ? 'ko' : ''}"><i>${m.done ? '✓' : m.failed ? '✗' : '•'}</i><span>${m.text}</span>` +
+    `<b>${live && !m.done && !m.failed ? missionProgress(m, mctx) : ''}</b><em>+${m.reward} 🍌</em></li>`).join('');
+  el.classList.toggle('hidden', !missions.length);
 }
 
 function hint(text) {
@@ -264,18 +302,29 @@ function updateHud(dt) {
     f.style.width = Math.min(100, p.charge / 2.6 * 100) + '%';
     f.style.background = ['#ffffff', '#38b6ff', '#ff9a1a', '#e04dff'][lvl];
   }
+  // misiones: se ven al empezar y se comprueban dos veces por segundo
+  const mp = race.state === 'intro' || race.state === 'countdown' || (race.state === 'racing' && race.time < 2.5);
+  if (lastHud.mp !== mp) { lastHud.mp = mp; $('hud-missions').classList.toggle('show', mp); }
+  missionT -= dt;
+  if (missionT <= 0 && missions.length) {
+    missionT = 0.5;
+    const m = syncMissions();
+    if (m && race.state === 'racing') { hint(fill('✓ Misión cumplida: {text}', m)); sfx.item(); }
+  }
   drawMinimap();
 }
 
 // ---------- Resultados ----------
 function showResults() {
+  if (resultsShown) return;
   resultsShown = true;
   const res = race.results(), me = res.find(r => r.isPlayer), d = diff();
   const list = $('r-list'); list.innerHTML = '';
-  let reward = 0, sub = currentTrack.name, rewardTxt = '';
+  let reward = 0, sub = currentTrack.name, rewardTxt = '', record = false;
   $('r-retry').classList.toggle('hidden', mode === 'cup');
   if (mode === 'time') {
-    const t = race.time, best = save.best[currentTrack.id], record = !best || t < best;
+    const t = race.time, best = save.best[currentTrack.id];
+    record = !best || t < best;
     $('r-title').textContent = record ? '¡Nuevo récord!' : 'Contrarreloj';
     list.innerHTML = `<li class="me"><b>⏱</b><span>Tu tiempo</span><span></span><span>${fmt(t)}</span></li>` +
       `<li><b>★</b><span>Mejor tiempo</span><span></span><span>${fmt(record ? t : best)}</span></li>`;
@@ -299,9 +348,14 @@ function showResults() {
     rewardTxt = `+${reward} 🍌`;
     $('r-next').textContent = mode === 'cup' ? (cupState.i < 2 ? 'Siguiente carrera ▶' : 'Ver clasificación ▶') : 'Menú ▶';
   }
+  // misiones (se pagan una sola vez, aquí), estadísticas de por vida y logros
+  mctx.finished = true; syncMissions(); renderMissions($('r-missions'), false);
+  const mr = missionsReward(missions);
+  if (mr) { reward += mr; rewardTxt = fill('+{total} 🍌 (misiones +{mr})', { total: reward, mr }) + (record ? ' · ¡récord!' : ''); }
+  recordRace(save, { mode, pos: me.pos, st: me.st, time: race.time, missions: missions.filter(x => x.done).length, record });
   $('r-sub').textContent = sub;
   $('r-reward').textContent = rewardTxt;
-  save.bananas += reward; persist();
+  earn(reward); persist(); awardAchievements();
   if (mode === 'race') startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, isPlayer: r.isPlayer })), me.pos, false);
   else show('results');
 }
@@ -340,17 +394,17 @@ function showCupFinal() {
     const key = cup.id + '_' + d.id, wasLocked = !cup1Unlocked();
     save.trophies[key] = Math.min(save.trophies[key] || 9, rank);
     bonus = Math.round([300, 200, 120][rank - 1] * d.reward);
-    save.bananas += bonus;
+    earn(bonus); if (rank === 1) addStat(save, 'golds');
     if (wasLocked && cup.id === 'platano') setTimeout(() => toast('¡Copa Diamante desbloqueada! 💎'), 600);
     sfx.buy();
   }
-  persist();
+  persist(); awardAchievements();
   $('r-title').textContent = rank === 1 ? '🏆 ¡Campeón!' : rank === 2 ? '🥈 ¡Segundo!' : rank === 3 ? '🥉 ¡Tercero!' : 'Fin de la copa';
   $('r-sub').textContent = `${cup.name} · ${d.name}`;
   $('r-reward').textContent = bonus ? `Premio: +${bonus} 🍌` : 'Queda entre los 3 primeros para ganar trofeo';
   $('r-next').textContent = 'Menú ▶';
   $('r-retry').classList.add('hidden');
-  cupState.done = true;
+  cupState.done = true; missions = []; renderMissions($('r-missions'), false);
   startPodium(rows.slice(0, 3).map(r => ({ char: r.ch, ...(cupState.ride[r.id] || {}), isPlayer: r.id === save.char })), rank, rank <= 3);
 }
 
@@ -416,7 +470,7 @@ function buildCups() {
 let gTab = 'chars', gSel = null;
 const STAT_NAMES = { speed: 'Velocidad', accel: 'Aceleración', handling: 'Manejo' };
 function buildGarage() {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === gTab));
+  document.querySelectorAll('#garage-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === gTab));
   const strip = $('garage-strip'); strip.innerHTML = '';
   if (gTab === 'colors') {
     KART_COLORS.forEach((c, i) => {
@@ -460,7 +514,27 @@ function garageAction() {
   } else sfx.ui();
   if (isC) save.char = gSel.id; else save.kart = gSel.id;
   persist(); refreshShow(); showPound = 1.2; showSpin = 4; buildGarage();
-  document.querySelectorAll('.bananas').forEach(b => { b.textContent = save.bananas; });
+  syncWallet(); awardAchievements();
+}
+
+// ---------- Misiones y logros ----------
+let mTab = 'ach';
+function buildMeta() {
+  document.querySelectorAll('#meta-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.mtab === mTab));
+  const box = $('meta-body'); box.className = 'meta-body tab-' + mTab; box.scrollTop = 0;
+  if (mTab === 'ach') {
+    const got = ACHIEVEMENTS.filter(a => achDone(save, a)).length;
+    box.innerHTML = `<p class="meta-note">${fill('Logros conseguidos: {got} de {all}', { got, all: ACHIEVEMENTS.length })}</p>` + ACHIEVEMENTS.map(a => {
+      const done = achDone(save, a), goal = achGoal(a), v = done ? goal : achValue(save, a);
+      return `<div class="ach${done ? ' done' : ''}"><span class="ach-ico">${a.icon}</span><div class="ach-txt"><h3>${a.name}</h3><p>${a.desc}</p>` +
+        `<div class="bar"><i style="width:${Math.round(v / goal * 100)}%"></i></div></div><div class="ach-side"><b>${done ? '✔' : v + '/' + goal}</b><small>🍌 ${a.reward}</small></div></div>`;
+    }).join('');
+  } else if (mTab === 'missions') {
+    box.innerHTML = '<p class="meta-note">En cada carrera recibes 3 misiones al azar (2 en contrarreloj). Cúmplelas para ganar plátanos extra al terminar.</p>' +
+      MISSIONS.map(x => `<div class="ach"><span class="ach-ico">📋</span><div class="ach-txt"><h3>${fill(x.text, { n: x.n, par: 'un tiempo objetivo' })}</h3></div><div class="ach-side"><small>🍌 ${x.reward}</small></div></div>`).join('');
+  } else {
+    box.innerHTML = LIFETIME.map(d => `<div class="lstat"><span>${d.name}</span><b>${statText(save, d)}</b></div>`).join('');
+  }
 }
 
 // ---------- Ajustes ----------
@@ -506,9 +580,11 @@ function wireUi() {
     else if (g === 'cups') { buildCups(); show('cups'); }
     else if (g === 'garage') { gSel = null; buildGarage(); show('garage'); }
     else if (g === 'settings') { buildSettings(); show('settings'); }
+    else if (g === 'meta') { mTab = 'ach'; buildMeta(); show('meta'); }
   });
+  document.querySelectorAll('#meta-tabs .tab').forEach(t => t.onclick = () => { mTab = t.dataset.mtab; sfx.ui(); buildMeta(); });
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { sfx.back(); refreshShow(); show('menu'); });
-  document.querySelectorAll('.tab').forEach(t => t.onclick = () => { gTab = t.dataset.tab; gSel = null; sfx.ui(); refreshShow(); buildGarage(); });
+  document.querySelectorAll('#garage-tabs .tab').forEach(t => t.onclick = () => { gTab = t.dataset.tab; gSel = null; sfx.ui(); refreshShow(); buildGarage(); });
   $('g-action').onclick = garageAction;
   $('podium-next').onclick = endPodium;
   $('s-podium').addEventListener('pointerup', e => { if (e.target.id !== 'podium-next' && podiumT > 2) endPodium(); });
@@ -546,7 +622,7 @@ function wireUi() {
 function setPaused(on) {
   if (!race || resultsShown) return;
   paused = on;
-  if (on) { show('pause', 'hud'); suspendAudio(true); }
+  if (on) { syncMissions(); renderMissions($('p-missions'), true); show('pause', 'hud'); suspendAudio(true); }
   else { suspendAudio(false); sfx.ui(); show('hud'); last = performance.now(); }
 }
 
@@ -623,4 +699,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, podium, post, save, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, podium, post, showModel: setShowModel, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
