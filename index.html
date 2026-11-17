@@ -124,6 +124,10 @@
   <div class="settings">
     <div class="row"><label>Controles</label><div class="seg" id="set-controls">
       <button data-v="buttons">Botones</button><button data-v="tilt">Inclinar móvil</button></div></div>
+    <div class="row"><label>Tamaño de botones</label><div class="seg" id="set-btnsize">
+      <button data-v="s">Pequeño</button><button data-v="m">Normal</button><button data-v="l">Grande</button></div></div>
+    <div class="row"><label>Modo zurdo</label><div class="seg" id="set-lefty"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Opacidad de botones</label><input type="range" id="set-btnalpha" min="0.3" max="1" step="0.05"></div>
     <div class="row"><label>Música</label><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Efectos</label><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Gráficos</label><div class="seg" id="set-quality">
@@ -144,7 +148,8 @@
       <b>Transformaciones:</b> en cada mapa hay un tramo de agua (barco), una gran rampa (ala delta) y una inmersión (submarino);
       el coche se transforma solo. Pasa por los aros para ganar impulso.<br>
       <b>Gráficos:</b> si el juego va lento, baja el nivel o desactiva contorno, resplandor y sombras.<br>
-      <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, P = pausa.<br>
+      <b>Botones:</b> puedes cambiar su tamaño y su opacidad, o pasarlos al otro lado con el modo zurdo (dirección a la derecha).<br>
+      <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, H = bocina, P = pausa.<br>
       <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
       En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
     </p>

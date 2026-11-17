@@ -661,6 +661,14 @@ function buildMeta() {
 }
 
 // ---------- Ajustes ----------
+// Botones táctiles: tamaño, opacidad y modo zurdo (variables CSS y clase del HUD)
+const BTN_SIZES = { s: 0.82, m: 1, l: 1.2 };
+function applyControls() {
+  const s = save.settings, hud = $('hud');
+  hud.style.setProperty('--ctl-k', BTN_SIZES[s.btnSize] || 1);
+  hud.style.setProperty('--ctl-a', Math.max(0.3, Math.min(1, +s.btnAlpha || 1)));
+  hud.classList.toggle('lefty', !!s.lefty);
+}
 function buildSettings() {
   const s = save.settings;
   const seg = (id, key, after) => {
@@ -676,6 +684,7 @@ function buildSettings() {
     });
   };
   seg('set-controls', 'controls');
+  seg('set-btnsize', 'btnSize', applyControls);
   // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
   seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; s.outline = s.quality !== 'baja'; persist(); resize(); buildSettings(); });
   const flag = (id, key, after) => {
@@ -688,6 +697,8 @@ function buildSettings() {
   if (s.outline == null) s.outline = true;
   flag('set-outline', 'outline', resize); flag('set-bloom', 'bloom', resize); flag('set-shadows', 'shadows');
   flag('set-haptics', 'haptics', () => { A.setHaptics?.(!!s.haptics); A.haptic?.('hit'); });
+  flag('set-lefty', 'lefty', applyControls);
+  $('set-btnalpha').value = s.btnAlpha;
   $('set-bloom').classList.toggle('off', !post.supported);
   $('set-music').value = s.music; $('set-sfx').value = s.sfx;
 }
@@ -718,8 +729,10 @@ function wireUi() {
   $('set-music').oninput = e => { save.settings.music = +e.target.value; setVolumes(save.settings.music, save.settings.sfx); persist(); };
   $('set-sfx').oninput = e => { save.settings.sfx = +e.target.value; setVolumes(save.settings.music, save.settings.sfx); };
   $('set-sfx').onchange = () => { persist(); sfx.coin(); };
+  $('set-btnalpha').oninput = e => { save.settings.btnAlpha = +e.target.value; applyControls(); };
+  $('set-btnalpha').onchange = () => persist();
   $('set-reset').onclick = () => {
-    if (confirm('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?')) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
+    if (confirm('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?')) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); applyControls(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
   };
   $('btn-pause').onclick = () => setPaused(true);
   $('p-resume').onclick = () => setPaused(false);
@@ -818,6 +831,7 @@ wireUi();
 setVolumes(save.settings.music, save.settings.sfx);
 A.setHaptics?.(save.settings.haptics !== false);
 if (save.settings.controls === 'tilt') enableTilt(true);
+applyControls();
 refreshShow();
 resize();
 show('title');
