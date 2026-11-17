@@ -677,10 +677,10 @@ export function buildTrack(def, opts = {}) {
       const s = samples[i], x = s.x + s.nx * lat, z = s.z + s.nz * lat;
       const m = new THREE.Mesh(g, own(new THREE.MeshBasicMaterial({ color: new THREE.Color(cols[n % 3]).multiplyScalar(B(1.9)) })));
       m.position.set(x, s.y + s.air + up, z); m.rotation.y = s.h; group.add(m);
-      rings.push({ idx: i, lat, x, z, y: s.y + s.air + up, mesh: m, cd: new Float32Array(8) });
+      rings.push({ idx: i, lat, x, z, y: s.y + s.air + up, up, air: s.air > 0, mesh: m, cd: new Float32Array(8) });
     };
     // en el vuelo los aros están a distinta altura: hay que subir o bajar para cogerlos
-    glRs.forEach(r => [0.26, 0.5, 0.74].forEach((t, n) => addRing(Math.round(r[0] + (r[1] - r[0]) * t), [-3, 2.5, -1][n], [1.4, 3.6, -1.4][n], n)));
+    glRs.forEach(r => [0.26, 0.5, 0.74].forEach((t, n) => addRing(Math.round(r[0] + (r[1] - r[0]) * t), [-3, 2.5, -1][n], [1.4, 3.8, -3.0][n], n)));
     subs.forEach((r, k) => { const a = fIdx(r[0] + r[2]), b = fIdx(r[1] - r[2]); [0.15, 0.5, 0.85].forEach((t, n) => addRing(Math.round(a + (b - a) * t), [2.5, -3, 1.5][n], 2.4, n + 1 + k)); });
     (def.ringsAt || []).forEach((u, n) => addRing(fIdx(u), [2.5, -3, 1.5, -1][n % 4], 2.4, n));
   }
