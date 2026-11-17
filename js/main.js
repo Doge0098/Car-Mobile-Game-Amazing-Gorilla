@@ -445,7 +445,8 @@ function showResults() {
   if (tuto) { showTutorialResults(); return; }
   const res = race.results(), me = res.find(r => r.isPlayer), d = diff();
   const list = $('r-list'); list.innerHTML = '';
-  let reward = 0, sub = currentTrack.name, rewardTxt = '', record = false;
+  let reward = 0, sub = currentTrack.name, record = false;
+  const extras = []; // desglose del premio: récord, misiones...
   $('r-retry').classList.toggle('hidden', mode === 'cup');
   if (mode === 'time') {
     const t = race.time, best = save.best[currentTrack.id];
@@ -455,7 +456,7 @@ function showResults() {
       `<li><b>★</b><span>Mejor tiempo</span><span></span><span>${fmt(record ? t : best)}</span></li>`;
     if (record) { save.best[currentTrack.id] = Math.round(t * 100) / 100; save.ghosts[currentTrack.id] = race.rec; A.playJingle?.('record'); }
     reward = 20 + me.bananas + (record ? 50 : 0);
-    rewardTxt = `+${reward} 🍌` + (record ? ' (récord +50)' : '');
+    if (record) extras.push('récord +50');
     $('r-next').textContent = 'Menú ▶';
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
@@ -470,16 +471,15 @@ function showResults() {
       list.appendChild(li);
     }
     reward = Math.round(RACE_REWARD[me.pos - 1] * d.reward) + me.bananas;
-    rewardTxt = `+${reward} 🍌`;
     $('r-next').textContent = mode === 'cup' ? (cupState.i < 2 ? 'Siguiente carrera ▶' : 'Ver clasificación ▶') : 'Menú ▶';
   }
   // misiones (se pagan una sola vez, aquí), estadísticas de por vida y logros
   mctx.finished = true; syncMissions(); renderMissions($('r-missions'), false);
   const mr = missionsReward(missions);
-  if (mr) { reward += mr; rewardTxt = fill('+{total} 🍌 (misiones +{mr})', { total: reward, mr }) + (record ? ' · ¡récord!' : ''); }
+  if (mr) { reward += mr; extras.push(fill('misiones +{mr}', { mr })); }
   recordRace(save, { mode, pos: me.pos, st: me.st, time: race.time, missions: missions.filter(x => x.done).length, record });
   $('r-sub').textContent = sub;
-  $('r-reward').textContent = rewardTxt;
+  $('r-reward').textContent = `+${reward} 🍌` + (extras.length ? ` (${extras.join(' · ')})` : '');
   earn(reward); persist(); awardAchievements();
   if (rules().podium) startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, hat: r.hat, wheels: r.wheels, isPlayer: r.isPlayer })), me.pos, false);
   else show('results');

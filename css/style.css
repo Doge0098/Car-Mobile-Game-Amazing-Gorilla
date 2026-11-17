@@ -38,7 +38,7 @@ html, body {
 }
 .btn:active, .btn.pressed { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink), inset 0 3px 0 rgba(255, 255, 255, .35); }
 .btn.big { font-size: clamp(22px, 5vmin, 40px); padding: 16px 44px; border-radius: 26px; background: linear-gradient(#ffe45a, #ffb21f); color: var(--ink); text-shadow: none; font-style: italic; }
-.btn.small { font-size: 14px; padding: 8px 14px; border-radius: 12px; }
+.btn.small { font-size: 14px; padding: 8px 14px; border-radius: 12px; min-height: 40px; }
 .btn.c1 { background: linear-gradient(#5cf09a, #18b65a); } .btn.c2 { background: linear-gradient(#ffe45a, #ffa51f); color: var(--ink); text-shadow: none; }
 .btn.c3 { background: linear-gradient(#4fd8ff, #1a8aff); } .btn.c4 { background: linear-gradient(#ff7ae0, #d82fb0); }
 .btn.c5 { background: linear-gradient(#a08cff, #5a3ce0); } .btn.c6 { background: linear-gradient(#ff8a5a, #e0301a); }
@@ -65,7 +65,7 @@ html, body {
 
 /* ---------- Selector segmentado ---------- */
 .seg { display: inline-flex; border: 3px solid var(--ink); border-radius: 14px; overflow: hidden; background: rgba(16, 6, 46, .6); flex: none; }
-.seg button { font: inherit; font-size: 13px; color: #fff; background: transparent; border: 0; padding: 8px 12px; cursor: pointer; }
+.seg button { font: inherit; font-size: 13px; color: #fff; background: transparent; border: 0; padding: 8px 12px; min-height: 40px; min-width: 44px; cursor: pointer; }
 .seg button.on { background: var(--yellow); color: var(--ink); }
 
 /* ---------- Tarjetas ---------- */
@@ -106,8 +106,8 @@ html, body {
 
 /* ---------- Ajustes ---------- */
 .settings { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 4px; max-width: 620px; width: 100%; margin: 0 auto; touch-action: pan-y; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(16, 6, 46, .55); border: 3px solid var(--ink); border-radius: 16px; padding: 10px 14px; }
-.row label { font-size: 16px; } .row label small { display: block; font-size: 11px; font-weight: 600; color: var(--yellow); } input[type=range] { flex: 1; max-width: 300px; accent-color: var(--yellow); height: 28px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; background: rgba(16, 6, 46, .55); border: 3px solid var(--ink); border-radius: 16px; padding: 10px 14px; }
+.row label { font-size: 16px; } .row > :last-child { margin-left: auto; } .row label small { display: block; font-size: 11px; font-weight: 600; color: var(--yellow); } input[type=range] { flex: 1; max-width: 300px; accent-color: var(--yellow); height: 40px; }
 .help { font-weight: 600; font-size: 13px; line-height: 1.5; background: rgba(16, 6, 46, .55); border-radius: 16px; padding: 12px 14px; margin: 0; }
 .help b { color: var(--yellow); }
 
@@ -123,7 +123,7 @@ html, body {
 .hud-item em { position: absolute; right: 4px; bottom: 0; font-size: 16px; font-style: normal; color: var(--ink); }
 .hud-right { right: calc(10px + var(--sa-r)); top: calc(8px + var(--sa-t)); display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .hud-time, .hud-bananas { background: rgba(16, 6, 46, .6); padding: 3px 12px; border-radius: 999px; font-size: clamp(14px, 3vmin, 20px); font-variant-numeric: tabular-nums; }
-.btn.pause { pointer-events: auto; padding: 6px 12px; border-radius: 12px; font-size: 16px; background: linear-gradient(#a08cff, #5a3ce0); }
+.btn.pause { pointer-events: auto; padding: 6px 12px; min-height: 40px; border-radius: 12px; font-size: 16px; background: linear-gradient(#a08cff, #5a3ce0); }
 #minimap { width: clamp(84px, 20vmin, 140px); height: clamp(84px, 20vmin, 140px); }
 .hud-msg { left: 50%; top: 34%; transform: translate(-50%, -50%); font-style: italic; font-size: clamp(54px, 17vmin, 150px); color: var(--yellow); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; text-shadow: 0 8px 0 rgba(0, 0, 0, .35); white-space: nowrap; opacity: 0; }
 .hud-msg.show { animation: msg 1s ease-out forwards; } .hud-msg.small { font-size: clamp(30px, 8vmin, 70px); color: #fff; }
@@ -170,7 +170,7 @@ html, body {
 .results li b { font-style: italic; font-size: 18px; } .results li span:last-child { font-variant-numeric: tabular-nums; min-width: 54px; text-align: right; }
 .reward { text-align: center; font-size: 17px; color: var(--yellow); min-height: 22px; }
 .rowbtns { display: flex; gap: 10px; } .rowbtns .btn { flex: 1; }
-@media (max-height: 400px) { .box { padding: 8px 16px; gap: 5px; } .results li { padding: 2px 12px; font-size: 13px; } .box .btn { padding: 7px 14px; } }
+@media (max-height: 400px) { .box { padding: 8px 16px; gap: 5px; } .results li { padding: 2px 12px; font-size: 13px; } .box .btn { padding: 7px 14px; min-height: 40px; } }
 
 #toast { position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%) translateY(30px); background: var(--ink); border: 3px solid var(--yellow); padding: 8px 18px; border-radius: 999px; font-size: 15px; opacity: 0; transition: all .25s; pointer-events: none; z-index: 20; white-space: nowrap; }
 #toast.show { opacity: 1; transform: translateX(-50%); }
@@ -210,6 +210,7 @@ html, body {
 .ctl.tuto-hl, .hud-item.tuto-hl { animation: hl .45s ease-in-out infinite alternate; }
 @keyframes hl { from { box-shadow: 0 0 0 3px var(--yellow), 0 0 14px 4px rgba(255, 210, 31, .7); } to { box-shadow: 0 0 0 7px var(--yellow), 0 0 30px 12px rgba(255, 210, 31, .9); } }
 @media (orientation: landscape) { .hud.tuto .hud-msg { top: 58%; } }
+@media (orientation: portrait) { .hud-msg { top: 41%; } } /* en vertical, por debajo del panel de misiones */
 @media (orientation: portrait) { .hud-tuto { top: calc(clamp(205px, 52vmin, 275px) + var(--sa-t)); max-width: 88vw; } }
 .box p.ask { margin: 0; max-width: 340px; font-weight: 700; line-height: 1.35; }
 .results:empty { display: none; }
