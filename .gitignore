@@ -1,1 +1,7 @@
+# Carpetas de trabajo locales
 .claude/
+# Carpetas generadas por el empaquetado Android (ver docs/APK.md). No se suben.
+# La barra inicial limita la regla a la raíz del repositorio.
+/node_modules/
+/www/
+/android/
