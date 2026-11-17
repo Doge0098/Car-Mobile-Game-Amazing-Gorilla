@@ -5,3 +5,13 @@
 /node_modules/
 /www/
 /android/
+/dist/
+# Claves de firma: nunca en el repositorio, que es público (ver docs/PLAY_STORE.md).
+# La única excepción es la clave de pruebas, que es pública a propósito.
+*.jks
+*.p12
+*.pfx
+*.keystore
+upload-keystore*
+upload_certificate*
+!/scripts/signing/debug.keystore

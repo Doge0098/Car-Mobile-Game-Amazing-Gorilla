@@ -11,7 +11,9 @@ const OUT = join(ROOT, 'www');
 
 // Lo que forma el juego. Si algún día se añade otra carpeta (p. ej. audio/), hay que
 // ponerla aquí y en los `paths` de .github/workflows/android-apk.yml.
-const FILES = ['index.html', 'manifest.webmanifest', 'sw.js'];
+// privacy.html es la política de privacidad: Google Play pide que se pueda leer también
+// desde dentro de la app, así que viaja en el APK aunque el juego no la enlace todavía.
+const FILES = ['index.html', 'privacy.html', 'manifest.webmanifest', 'sw.js'];
 const DIRS = ['css', 'js', 'icons'];
 
 function fail(msg) {

@@ -1,6 +1,9 @@
-# Empaqueta el juego como app de Android (APK) con Capacitor.
+# Empaqueta el juego como app de Android con Capacitor. Hace dos cosas a la vez:
+#   - trabajo "apk":  el APK de pruebas, que se publica en la release fija apk-latest.
+#                     Cómo descargarlo e instalarlo: docs/APK.md
+#   - trabajo "play": la versión para Google Play (AAB y APK firmados con la clave de
+#                     subida del dueño). Cómo publicarla: docs/PLAY_STORE.md
 # El proyecto Android no está en el repositorio: se genera aquí en cada ejecución.
-# Instrucciones para descargar e instalar el APK: docs/APK.md
 name: Compilar APK Android
 
 on:
@@ -12,6 +15,7 @@ on:
       - '**'
     paths:
       - 'index.html'
+      - 'privacy.html'
       - 'manifest.webmanifest'
       - 'sw.js'
       - 'css/**'
@@ -23,9 +27,10 @@ on:
       - 'scripts/**'
       - '.github/workflows/android-apk.yml'
 
-# Lo mínimo para crear o actualizar la release con el APK.
+# Por defecto, solo leer el repositorio. El trabajo "apk" pide además poder escribir,
+# que es lo mínimo para crear o actualizar la release con el APK.
 permissions:
-  contents: write
+  contents: read
 
 # Las compilaciones van de una en una. Si llegan varias mientras hay una en marcha,
 # solo espera la última; la que está en marcha no se corta a medio publicar.
@@ -42,6 +47,8 @@ jobs:
     name: Compilar APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       - name: Descargar el código
@@ -105,6 +112,8 @@ jobs:
         id: patch
         env:
           APK_BUILD_NUMBER: ${{ github.run_number }}
+          # Variable opcional del repositorio; lo normal es que no exista (docs/PLAY_STORE.md).
+          APK_VERSION_CODE_OFFSET: ${{ vars.ANDROID_VERSION_CODE_OFFSET }}
         run: node scripts/patch-android.mjs
 
       - name: Sincronizar Capacitor
@@ -190,3 +199,163 @@ jobs:
             echo
             echo "Instrucciones de instalación: [docs/APK.md]($repo_url/blob/$GITHUB_SHA/docs/APK.md)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Versión para Google Play: un AAB (lo que se sube a Play Console) y un APK de esa misma
+  # versión, firmados con la clave de subida del dueño. La clave vive en cuatro secretos
+  # del repositorio (docs/PLAY_STORE.md). Si no existen, este trabajo solo hace un ensayo:
+  # compila lo mismo firmando con la clave de pruebas, para saber que funciona, y no
+  # guarda nada. Nunca toca la release pública apk-latest: sus archivos se quedan como
+  # artefactos de la ejecución. Un fallo aquí no afecta al APK de pruebas.
+  #
+  # Los pasos de preparación son los mismos que en el trabajo "apk": si cambias uno,
+  # cambia el otro.
+  play:
+    name: Compilar versión para Google Play
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Este trabajo maneja la clave de firma: solo puede leer el repositorio.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Capacitor 8 compila con Java 21.
+      - name: Preparar Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Lo primero: así un secreto mal copiado se ve en un minuto y no al final. Decide
+      # el modo ("propia" o "ensayo") y deja el almacén de claves fuera del repositorio.
+      # Los secretos solo llegan a este paso y al de compilar, y nunca se imprimen.
+      - name: Comprobar la clave de firma
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: node scripts/release-signing.mjs prepare
+
+      # Solo se lee: la caché la guarda el trabajo "apk", que descarga casi lo mismo.
+      - name: Recuperar la caché de Gradle
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Comprobar el SDK de Android
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$sdk" ] || [ ! -d "$sdk" ]; then
+            echo "::error::Esta máquina no trae el SDK de Android (ANDROID_HOME está vacío)."
+            exit 1
+          fi
+          echo "SDK de Android: $sdk"
+          for dir in platforms build-tools; do
+            echo "$dir: $(find "$sdk/$dir" -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ' || true)"
+          done
+          # Con las licencias aceptadas, Gradle descarga solo lo que falte del SDK.
+          for sdkmanager in "$sdk"/cmdline-tools/*/bin/sdkmanager; do
+            if [ -x "$sdkmanager" ]; then
+              yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+              break
+            fi
+          done
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Montar la web (www/)
+        run: node scripts/build-www.mjs
+
+      - name: Crear el proyecto Android
+        run: npx cap add android
+
+      # El mismo número de versión que el APK de pruebas de esta ejecución. Sube solo en
+      # cada ejecución nueva: Google Play no admite repetir ni bajar el versionCode.
+      - name: Adaptar el proyecto Android
+        id: patch
+        env:
+          APK_BUILD_NUMBER: ${{ github.run_number }}
+          APK_VERSION_CODE_OFFSET: ${{ vars.ANDROID_VERSION_CODE_OFFSET }}
+        run: node scripts/patch-android.mjs
+
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      # Gradle lee la clave de estas variables (scripts/patch-android.mjs). En el ensayo
+      # son los datos de la clave de pruebas, que ya son públicos.
+      - name: Compilar el AAB y el APK de publicación
+        working-directory: android
+        env:
+          AGR_RELEASE_STORE_FILE: ${{ steps.signing.outputs.store_file }}
+          AGR_RELEASE_STORE_PASSWORD: ${{ steps.signing.outputs.mode == 'propia' && secrets.ANDROID_KEYSTORE_PASSWORD || 'android' }}
+          AGR_RELEASE_KEY_ALIAS: ${{ steps.signing.outputs.mode == 'propia' && secrets.ANDROID_KEY_ALIAS || 'androiddebugkey' }}
+          AGR_RELEASE_KEY_PASSWORD: ${{ steps.signing.outputs.mode == 'propia' && secrets.ANDROID_KEY_PASSWORD || 'android' }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace
+
+      # La clave ya no hace falta: se borra de la máquina, haya ido bien o mal la compilación.
+      - name: Borrar la clave de firma de la máquina
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/agr-signing"
+
+      # Comprueba que el AAB y el APK llevan la firma esperada y deja escrito en el registro
+      # lo que Google Play va a leer: versión, API objetivo y orientación de pantalla.
+      - name: Comprobar y recoger el AAB y el APK
+        id: collect
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+          SIGNING_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
+          VERSION_NAME: ${{ steps.patch.outputs.version_name }}
+          VERSION_CODE: ${{ steps.patch.outputs.version_code }}
+        run: node scripts/release-signing.mjs collect
+
+      # Sin comprimir en .zip: desde el móvil se descarga directamente el .aab.
+      - name: Guardar el AAB como artefacto
+        id: upload_aab
+        if: ${{ steps.signing.outputs.mode == 'propia' }}
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.collect.outputs.aab }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Guardar el APK de publicación como artefacto
+        id: upload_apk
+        if: ${{ steps.signing.outputs.mode == 'propia' }}
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.collect.outputs.apk }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Escribir el resumen
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+          SIGNING_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
+          VERSION_NAME: ${{ steps.patch.outputs.version_name }}
+          VERSION_CODE: ${{ steps.patch.outputs.version_code }}
+          TARGET_SDK: ${{ steps.patch.outputs.target_sdk }}
+          AAB_NAME: ${{ steps.collect.outputs.aab_name }}
+          AAB_URL: ${{ steps.upload_aab.outputs.artifact-url }}
+          APK_NAME: ${{ steps.collect.outputs.apk_name }}
+          APK_URL: ${{ steps.upload_apk.outputs.artifact-url }}
+        run: node scripts/release-signing.mjs summary
