@@ -6,6 +6,8 @@ import { PROPS, canvasTex, glowTex, merged } from './models.js';
 import { buildScenery } from './scenery.js';
 import { outlineInstanced } from './outline.js';
 
+// circuitos en los que la bifurcación tiene preferencia sobre el atajo
+const FORK_FIRST = {};
 const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const segDist = (x, z, ax, az, bx, bz) => { const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz))); return Math.hypot(x - ax - dx * t, z - az - dz * t); };
 const ico = (r, d = 1) => new THREE.IcosahedronGeometry(r, d), cylG = (a, b, h, n = 6) => new THREE.CylinderGeometry(a, b, h, n);
@@ -200,14 +202,33 @@ export function buildTrack(def, opts = {}) {
   const rampIdx = (def.ramps || []).map(fIdx);
   const nearRamp = i => rampIdx.some(r => { let d = Math.abs(i - r); d = Math.min(d, N - d); return d < 22; });
 
+  // ---- Dónde cabe una bifurcación: una curva de carretera normal (puede tener una rampa en medio: el carril la esquiva) ----
+  // El atajo y la bifurcación compiten por las pocas curvas libres; en los circuitos de FORK_FIRST elige primero la bifurcación.
+  const FORK_LEN = 50, forkFirst = def.forkFirst ?? !!FORK_FIRST[def.id] ?? false;
+  let shortcut = null, forkWin = null;
+  const findFork = () => {
+    if (def.noFork || def.deepAll) return null;
+    let best = 0, bi = -1, bs = 1;
+    for (let i = 40; i < N - FORK_LEN - 12; i += 2) { // (lejos de la salida y sus gradas)
+      if (shortcut && i - 14 < shortcut.i1 && i + FORK_LEN + 14 > shortcut.i0) continue; // sin pisar el atajo
+      let ok = true;
+      for (let k = -6; k <= FORK_LEN + 6 && ok; k += 2) { const q = samples[i + k]; if (special(q) || q.tun) ok = false; } // las rampas no estorban: el carril pasa por su lado
+      if (!ok) continue;
+      let turn = 0; for (let k = 0; k < FORK_LEN; k += 2) turn += samples[i + k].curv;
+      if (Math.abs(turn) > best) { best = Math.abs(turn); bi = i; bs = turn > 0 ? 1 : -1; }
+    }
+    return bi >= 0 && best > 0.05 ? { bi, bs } : null;
+  };
+  if (forkFirst) forkWin = findFork();
+
   // ---- Atajo: un trampolín en el arcén interior que lanza el coche por encima de la curva ----
-  let shortcut = null;
   if (!def.noShortcut && !def.deepAll) { // (bajo el mar no hay trampolines)
     // se busca la curva libre (sin túnel, puente, agua ni rampas) donde más se ahorra; primero con saltos largos
     let span = 0, best = 0, bi = -1;
     for (const sp of [64, 52, 40, 30]) {
       let b = 0, at = -1;
       for (let i = 50; i < N - sp - 24; i += 2) {
+        if (forkWin && i - 14 < forkWin.bi + FORK_LEN && i + sp + 14 > forkWin.bi) continue; // sin pisar la bifurcación
         // el despegue y el aterrizaje deben estar en carretera normal; por el aire se puede pasar sobre rampas y puentes,
         // pero no sobre túneles ni tramos de barco, vuelo o submarino
         let ok = true;
@@ -248,6 +269,34 @@ export function buildTrack(def, opts = {}) {
   }
 
   let nearI = 0;
+  // ---- Bifurcación: un carril estrecho que se separa por el interior de una curva y vuelve a unirse ----
+  let fork = null;
+  {
+    if (!forkFirst) forkWin = findFork();
+    if (forkWin) {
+      const len = FORK_LEN, bi = forkWin.bi, bs = forkWin.bs;
+      const fwid = 2.7, off = hw + 5.2, pos = [], uv = [], idx = [], cones = [];
+      for (let j = 0; j <= len; j++) {
+        const q = samples[bi + j], u = j / len, k = smooth(0, 0.24, u) * (1 - smooth(0.76, 1, u)), c = bs * off * k;
+        q.fk = c; q.fw = fwid;
+        pos.push(q.x + q.nx * (c + fwid), q.y + 0.05, q.z + q.nz * (c + fwid), q.x + q.nx * (c - fwid), q.y + 0.05, q.z + q.nz * (c - fwid));
+        uv.push(0, j * 0.14, 1, j * 0.14);
+        if (j < len) { const a = j * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+        // conos en la mediana que separa los dos carriles
+        if (k > 0.8 && j % 3 === 0) { const m = bs * (hw + 1.3); cones.push([new THREE.ConeGeometry(0.4, 1.0, 6), (j / 3) % 2 ? 0xffffff : 0xff7a1a, [q.x + q.nx * m, q.y + 0.5, q.z + q.nz * m]]); }
+      }
+      const g = own(new THREE.BufferGeometry());
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      // cartel de dos flechas donde se separan
+      const q0 = samples[bi + 9], m0 = bs * (hw + 1.3), sx = q0.x + q0.nx * m0, sz = q0.z + q0.nz * m0;
+      cones.push([cylG(0.09, 0.09, 3.2, 5), 0xf0f0f0, [sx, q0.y + 1.6, sz]]);
+      const cm = new THREE.Mesh(own(merged(cones)), own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }))); cm.castShadow = shadows; group.add(cm);
+      const st = own(canvasTex(128, 56, (c) => { c.fillStyle = '#ffd21f'; c.fillRect(0, 0, 128, 56); c.fillStyle = '#1a0b3a'; c.font = '900 40px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('◀ ▶', 64, 30); }));
+      const sg = new THREE.Mesh(own(new THREE.PlaneGeometry(3.2, 1.4)), own(new THREE.MeshBasicMaterial({ map: st, side: THREE.DoubleSide }))); sg.position.set(sx, q0.y + 3.2, sz); sg.rotation.y = q0.h + Math.PI; group.add(sg);
+      fork = { i0: bi, i1: bi + len, side: bs, geo: g }; // la malla del carril se crea más abajo, con la textura de la carretera
+    }
+  }
+
   const distToTrack = (x, z, stride = 3) => {
     let best = 1e12;
     for (let i = 0; i < N; i += stride) { const s = samples[i], dx = x - s.x, dz = z - s.z, d = dx * dx + dz * dz; if (d < best) { best = d; nearI = i; } }
@@ -288,6 +337,7 @@ export function buildTrack(def, opts = {}) {
       ? new THREE.MeshBasicMaterial({ map: roadTex, vertexColors: true })
       : new THREE.MeshLambertMaterial({ map: roadTex, vertexColors: true }));
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; group.add(m);
+    if (fork) { const fm = new THREE.Mesh(fork.geo, own(new THREE.MeshLambertMaterial({ map: roadTex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }))); fm.receiveShadow = true; group.add(fm); }
   }
   // ---- Pianos, arcenes y barreras ----
   const deckC = new THREE.Color(ex.deck), gC1 = new THREE.Color(th.ground), gC2 = new THREE.Color(th.ground2), tunC = new THREE.Color(ex.tunnelCol).multiplyScalar(0.55);
@@ -359,7 +409,7 @@ export function buildTrack(def, opts = {}) {
     if (cz > 0) far += (Math.min(far, th.liquidLevel - (s.deep > s.carve ? 5 : 2.5)) - far) * cz * (1 - smooth(70, 170, d));
     return near + (far - near) * smooth(hw + 17, hw + 85, d);
   };
-  const tSize = 1900, tSeg = quality > 0.7 ? 150 : 100;
+  const tSize = 1900, tSeg = quality > 1.1 ? 190 : quality > 0.7 ? 150 : 100;
   let heightTex;
   {
     const g = own(new THREE.PlaneGeometry(tSize, tSize, tSeg, tSeg));
@@ -503,7 +553,7 @@ export function buildTrack(def, opts = {}) {
   group.add(hemi, dir, dir.target);
   if (shadows) {
     dir.castShadow = true;
-    const sz = quality > 0.7 ? 2048 : 1024;
+    const sz = quality > 1.1 ? 4096 : quality > 0.7 ? 2048 : 1024;
     dir.shadow.mapSize.set(sz, sz);
     const sc = dir.shadow.camera; sc.left = sc.bottom = -62; sc.right = sc.top = 62; sc.near = 20; sc.far = 420; sc.updateProjectionMatrix();
     dir.shadow.bias = -0.0008; dir.shadow.normalBias = 0.35;
@@ -515,7 +565,7 @@ export function buildTrack(def, opts = {}) {
     const o = new THREE.Object3D(), c = new THREE.Color();
     for (const [type, count0] of th.props) {
       const P = PROPS[type] || XPROPS[type]; if (!P) continue;
-      const count = Math.round(count0 * (quality > 0.7 ? 1 : 0.55));
+      const count = Math.round(count0 * (quality > 1.1 ? 1.4 : quality > 0.7 ? 1 : 0.55));
       const g = own(P.make());
       const mat = own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
       if (P.glow) {
@@ -534,7 +584,7 @@ export function buildTrack(def, opts = {}) {
         const s = samples[nearI], d = lastD;
         if ((s.carve > 0.02 || s.deep > 0.02) && d < 60) continue;
         if (s.kt > 0.02 && d < hw + 14) continue;
-        if (small && d < s.lim + 2.4) { if (d < hw + 3) continue; y = s.y + 0.08; } else if (d < s.lim + 10) continue;
+        if (small && d < s.lim + 2.4) { if (d < hw + 3 || s.fw) continue; y = s.y + 0.08; } else if (d < s.lim + 10) continue;
         if (!th.underwater && y < th.liquidLevel + 0.4) continue;
         if (shortcut && segDist(x, z, shortcut.ex, shortcut.ez, shortcut.lx, shortcut.lz) < 10) continue;
         const sc = P.scale[0] + rand() * (P.scale[1] - P.scale[0]);
@@ -624,6 +674,20 @@ export function buildTrack(def, opts = {}) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
     const mat = own(new THREE.MeshBasicMaterial({ map: padTex, color: new THREE.Color(1, 1, 1).multiplyScalar(B(1.2)), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     group.add(new THREE.Mesh(g, mat));
+  }
+
+  // acelerador en el carril de la bifurcación: el premio por atreverse con el carril estrecho
+  if (fork) {
+    const pos = [], uv = [], idx = [], j0 = fork.i0 + 23;
+    for (let j = 0; j <= 3; j++) {
+      const q = samples[j0 + j], c = q.fk;
+      pos.push(q.x + q.nx * (c + 2.1), q.y + 0.1, q.z + q.nz * (c + 2.1), q.x + q.nx * (c - 2.1), q.y + 0.1, q.z + q.nz * (c - 2.1)); uv.push(0, j * 0.5, 1, j * 0.5);
+      if (j < 3) { const a = j * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const sm = samples[j0 + 1]; pads.push({ idx: j0 + 1, x: sm.x + sm.nx * sm.fk, z: sm.z + sm.nz * sm.fk });
+    const g = own(new THREE.BufferGeometry());
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    group.add(new THREE.Mesh(g, own(new THREE.MeshBasicMaterial({ map: padTex, color: new THREE.Color(1, 1, 1).multiplyScalar(B(1.2)), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }))));
   }
 
   const curTex = own(canvasTex(64, 64, (c) => {
@@ -781,7 +845,7 @@ export function buildTrack(def, opts = {}) {
   const tmp = new THREE.Object3D(), baseHemi = hemi.intensity, baseDir = dir.intensity;
   const track = {
     def, group, fog, samples, N, length, spacing, hw, maxCurv, unlitRoad,
-    pads, ramps, rings, itemBoxes, bananas, puddles, shortcut, currents, variant, mini: { minX, maxX, minZ, maxZ }, liquidLevel: th.liquidLevel, farMesh,
+    pads, ramps, rings, itemBoxes, bananas, puddles, shortcut, fork, currents, variant, mini: { minX, maxX, minZ, maxZ }, liquidLevel: th.liquidLevel, farMesh,
     sunDir, hemi, dir, skyMat, baseFog: [th.fogNear, th.fogFar], fIdx,
     isFree: i => (!special(samples[i]) || (def.hazardInZones && !samples[i].tun && samples[i].kb < 0.02)) && !nearRamp(i),
     grid(i) {

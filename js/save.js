@@ -21,15 +21,20 @@ const defaults = () => ({
   achievements: {},  // id de logro -> 1 (conseguido y cobrado)
   tutorial: '',      // '' sin ofrecer · 'seen' ofrecido · 'done' completado
   rival: { char: '', level: 0, wins: 0, losses: 0 }, // rival personal: quién es y lo fuerte que corre
+  medals: {},        // contrarreloj: circuito[:variante] -> 1 bronce, 2 plata, 3 oro
+  bosses: {},        // id de jefe -> 1 (derrotado)
+  daily: { done: 0, streak: 0 }, // reto diario: último día superado (AAAAMMDD) y racha de días seguidos
   settings: {
     controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, outline: true, haptics: true,
     btnSize: 'm', lefty: false, btnAlpha: 1, // tamaño (s/m/l), modo zurdo y opacidad de los botones táctiles
     autoQuality: true, autoQ: 0,             // calidad automática y pasos de reducción ya aplicados
     lang: '',                                // idioma: '' automático (el del móvil) · 'es' · 'en'
+    battery: false, fps: false,              // ahorro de batería (30 FPS) y contador de FPS
+    assistSteer: false, autoDrift: false,    // ayudas de conducción
   },
 });
 
-const OBJECTS = ['settings', 'upgrades', 'trophies', 'best', 'ghosts', 'stats', 'achievements', 'rival'];
+const OBJECTS = ['settings', 'upgrades', 'trophies', 'best', 'ghosts', 'stats', 'achievements', 'rival', 'medals', 'bosses', 'daily'];
 const LISTS = ['chars', 'karts', 'hats', 'wheels', 'trails', 'horns'];
 
 export let save = defaults();

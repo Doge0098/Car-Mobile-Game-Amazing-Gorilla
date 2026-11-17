@@ -1,6 +1,6 @@
 // Amazing Gorilla Racing — arranque, menús, HUD y bucle principal.
 import * as THREE from './vendor/three.module.min.js';
-import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, RACERS, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
+import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, EXTRA_TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, RACERS, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
 import { save, loadSave, persist, resetSave } from './save.js';
 import * as A from './audio.js';
 import { initInput, input, pollInput, consumePresses, enableTilt } from './input.js';
@@ -15,8 +15,11 @@ import { SHOP, TRAILS, UPGRADES, UPGRADE_MAX, upgradeLevel, upgradePrice, upgrad
 import { Tutorial, TUTORIAL } from './tutorial.js';
 import { buildShowroom } from './showroom.js';
 import { share } from './share.js';
+import { todDef, surpriseTrack } from './variants.js';
+import { dailyChallenge, isYesterday, DAILY_REWARD, DAILY_STREAK_BONUS, DAILY_STREAK_MAX } from './daily.js';
+import { BOSSES, BOSS_REWARD } from './boss.js';
 import { t, lang, setLang, initI18n } from './i18n.js';
-import { MISSIONS, MISSION_COUNT, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
+import { medalTimes, MEDAL_NAMES, MEDAL_REWARD, MISSIONS, MISSION_COUNT, ACHIEVEMENTS, LIFETIME, fill, pickMissions, parTime, updateMissions, missionProgress, missionsReward, recordRace, addStat, statText, checkAchievements, achGoal, achValue, achDone } from './meta.js';
 
 const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
 const $ = id => document.getElementById(id);
@@ -31,7 +34,7 @@ const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setClearColor(0x1a0b3a);
 const camera = new THREE.PerspectiveCamera(68, 1, 0.3, 2400);
-const qualityK = () => ({ baja: 0.5, media: 0.8, alta: 1 }[save.settings.quality] || 1);
+const qualityK = () => ({ baja: 0.5, media: 0.8, alta: 1, ultra: 1.3 }[save.settings.quality] || 1);
 const post = new Post(renderer);
 // ---------- Calidad automática ----------
 // Gráficos efectivos = ajustes del jugador menos los pasos de reducción automática ya aplicados (settings.autoQ):
@@ -42,9 +45,9 @@ const autoN = () => (save.settings.autoQuality !== false ? Math.max(0, Math.min(
 function syncGfx() {
   const s = save.settings, n = autoN();
   G.shadows = !!s.shadows && n < 1; G.outline = s.outline !== false && n < 3; G.bloom = !!s.bloom && n < 4;
-  G.pr = s.quality === 'alta' ? 2 : s.quality === 'media' ? 1.5 : 1;
+  G.pr = s.quality === 'ultra' ? 3 : s.quality === 'alta' ? 2 : s.quality === 'media' ? 1.5 : 1;
   if (n >= 2) G.pr = Math.min(G.pr, 1.5); if (n >= 5) G.pr = 1;
-  G.msaa = s.quality === 'alta' && n < 2 ? 4 : 0;
+  G.msaa = (s.quality === 'alta' || s.quality === 'ultra') && n < 2 ? 4 : 0;
 }
 const usePost = () => G.bloom && post.supported;
 function render(scene, cam) {
@@ -52,6 +55,7 @@ function render(scene, cam) {
 }
 
 function resize() {
+  if (innerHeight > innerWidth && isTouch() && race && !paused && !resultsShown && screen === 'hud') setPaused(true); // en vertical la carrera se detiene
   syncGfx();
   const w = innerWidth, h = innerHeight;
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, G.pr));
@@ -126,7 +130,7 @@ function updateShowTrail() {
 
 // ---------- Pantallas ----------
 let screen = 'title';
-const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0], tutoask: [0.2, 0] };
+const OFFSETS = { title: [0.3, 0], menu: [0.2, 0], garage: [0.22, 0.02], tracks: [0, 0], cups: [0, 0], settings: [0, 0], meta: [0, 0], tutoask: [0.2, 0], modes: [0, 0] };
 function placeShow() {
   const o = OFFSETS[screen]; if (!o) return;
   const portrait = innerWidth < innerHeight;
@@ -186,12 +190,19 @@ const MODE_RULES = {
   cup: {},
   time: {},
   elim: { podium: true },                                      // eliminación: el último queda fuera cada pocos segundos
-  battle: { podium: true, track: 'arena', noHazards: true },   // batalla de globos en la arena
+  battle: { podium: true, arena: true, noHazards: true },      // batalla de globos en una arena
+  fever: { podium: true, arena: true, noHazards: true },       // fiebre del plátano: gana quien recoja más
+  stunt: { podium: true },                                     // acrobacias: gana quien sume más puntos
+  surprise: { podium: true },                                  // circuito generado al azar
+  daily: { podium: true },                                     // reto diario (daily.js)
+  boss: { rivals: 1 },                                         // duelo contra un jefe (boss.js)
   tutorial: TUTORIAL,
 };
-const VARIANT_MODES = ['race', 'time', 'elim']; // modos en los que se puede correr en espejo o al revés
+const VARIANT_MODES = ['race', 'time', 'elim', 'stunt']; // modos en los que se elige espejo/inverso y la hora del día
+let tod = '', arenaId = 'arena', surprise = null, daily = null, bossNow = null, builtDef = null; // hora del día, arena elegida, circuito sorpresa, reto del día, jefe y circuito tal como se ha construido
+const bossTrack = b => CUPS[b.cup].tracks[CUPS[b.cup].tracks.length - 1]; // cada jefe espera en el último circuito de su copa
 let variant = '', raceKind = 'race';            // variante del circuito ('' | 'mirror' | 'reverse') y tipo de carrera rápida ('race' | 'elim')
-let replaying = false, photo = false, glideHints = 0, curHints = 0;
+let replaying = false, photo = false, glideHints = 0, curHints = 0, draftHints = 0;
 const ph = { a: 0, e: 0.22, d: 10, keep: null }; // cámara del modo foto: ángulo, elevación y distancia
 const recKey = () => currentTrack.id + (variant ? ':' + variant : ''); // clave de récords y fantasmas
 const rules = () => MODE_RULES[mode] || {};
@@ -212,7 +223,7 @@ function rivalDef() {
   }
   return { char: rv.char, level: Math.max(RIVAL_MIN, Math.min(RIVAL_MAX, rv.level | 0)) };
 }
-const hasRival = () => mode !== 'tutorial' && mode !== 'time';
+const hasRival = () => mode !== 'tutorial' && mode !== 'time' && mode !== 'boss';
 const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
 
 // Parrilla de rivales al azar: [{ char, kart, color }] (en una copa se mantiene durante sus carreras)
@@ -243,26 +254,31 @@ function startRace(trackId) {
   setTimeout(() => {
     disposeRace();
     const R = rules();
-    currentTrack = trackById(R.track || trackId);
-    if (!VARIANT_MODES.includes(mode)) variant = '';
+    currentTrack = mode === 'surprise' ? surprise : trackById(R.arena ? arenaId : mode === 'daily' ? daily.track : mode === 'boss' ? bossTrack(bossNow) : R.track || trackId);
+    if (mode === 'daily') variant = daily.variant; else if (!VARIANT_MODES.includes(mode)) variant = '';
+    const X = mode === 'daily' ? daily.mod.opts : {}; // reglas especiales del reto diario
+    builtDef = todDef(currentTrack, mode === 'daily' ? daily.tod : VARIANT_MODES.includes(mode) ? tod : '');
     syncGfx();
     const q = qualityK();
     const gfx = { quality: q, bloom: usePost(), shadows: G.shadows, outline: G.outline };
-    renderer.shadowMap.enabled = gfx.shadows;
-    track = buildTrack(currentTrack, { ...gfx, variant: variant || null });
+    renderer.shadowMap.enabled = gfx.shadows; renderer.shadowMap.type = q > 1.1 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; // en Ultra, sombras suaves
+    track = buildTrack(builtDef, { ...gfx, variant: variant || null });
     raceScene = new THREE.Scene();
-    raceScene.fog = track.fog; raceScene.background = new THREE.Color(currentTrack.theme.fog);
+    raceScene.fog = track.fog; raceScene.background = new THREE.Color(builtDef.theme.fog);
     raceScene.add(track.group);
-    fxAdd = new Particles(q < 0.7 ? 400 : 900, true); fxNorm = new Particles(q < 0.7 ? 150 : 300, false);
+    fxAdd = new Particles(q < 0.7 ? 400 : q > 1.1 ? 1400 : 900, true); fxNorm = new Particles(q < 0.7 ? 150 : q > 1.1 ? 450 : 300, false);
     raceScene.add(fxAdd.points, fxNorm.points);
-    ambient = new Ambient(currentTrack.theme.fx, currentTrack.theme.fxColor, q < 0.7 ? 60 : 140);
+    ambient = new Ambient(currentTrack.theme.fx, currentTrack.theme.fxColor, q < 0.7 ? 60 : q > 1.1 ? 220 : 140);
     raceScene.add(ambient.points);
     race = new Race({
-      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: R.difficulty || diff(), laps: R.laps, ...gfx,
+      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: R.difficulty || (mode === 'daily' && daily.mod.hard ? DIFFICULTIES[2] : diff()), laps: X.laps || R.laps, ...gfx,
+      night: !!builtDef.theme.night, forceItem: X.forceItem, gravityK: X.gravityK, boxRespawn: X.boxRespawn, rivalSize: X.rivalSize,
+      paceTime: mode === 'time' ? (medalTimes(currentTrack.id) || [0])[0] : 0,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
       playerHat: save.hat, playerWheel: save.wheel, playerTrail: byId(TRAILS, save.trail), playerHorn: save.horn, playerTune: R.tune || upgradeTune(save),
-      rivals: cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
-      rivalDef: hasRival() ? rivalDef() : null,
+      rivals: mode === 'boss' ? [{ char: bossNow.id, charDef: bossNow.char, kart: bossNow.kart, color: bossNow.color, size: bossNow.size, boss: bossNow }]
+        : cupState ? cupState.rivals : makeLineup(R.rivals || RACERS - 1), aiItems: R.aiItems, noHazards: R.noHazards,
+      rivalDef: hasRival() ? rivalDef() : null, assistSteer: !!save.settings.assistSteer, autoDrift: !!save.settings.autoDrift,
       ghostData: mode === 'time' ? (share.ghost(currentTrack.id, variant) || save.ghosts[recKey()]) : null, onEvent: onRaceEvent,
     });
     paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; frameAvg = 1 / 60; lowT = 0; stepGap = 2;
@@ -286,9 +302,13 @@ function startRace(trackId) {
     if (amb !== '') A.startAmbience?.(amb || currentTrack.music.style);
     A.playJingle?.('start');
     startEngine();
-    hudMsg(t(currentTrack.name), true);
+    hudMsg(mode === 'boss' ? '👑 ' + bossNow.name : t(currentTrack.name), true);
     if (mode === 'elim') hint('Cada pocos segundos, el último queda eliminado. ¡No te quedes atrás!');
     else if (mode === 'battle') hint('Golpea a tus rivales con objetos para reventar sus globos. ¡Protege los tuyos!');
+    else if (mode === 'fever') hint('Recoge más plátanos que nadie antes de que acabe el tiempo. ¡Cada golpe te quita plátanos!');
+    else if (mode === 'stunt') hint('Suma puntos con trucos, derrapes, aros y atajos antes de que acabe el tiempo');
+    else if (mode === 'boss') hint(fill(t('👑 {name}: {tip}'), { name: bossNow.name, tip: t(bossNow.tip) }));
+    else if (mode === 'daily') hint(fill(t('📅 Reto diario · {name}: {desc}'), { name: t(daily.mod.name), desc: t(daily.mod.desc) }));
     else if (race.rival && !tuto) hint(fill(t('⚔️ Tu rival es {name}: acaba por delante para ganar un premio extra'), race.rival.char));
     $('loading').classList.add('hidden');
   }, 60);
@@ -355,6 +375,10 @@ function onRaceEvent(ev, data) {
     if (data === 'glide' && glideHints++ < 3) hint('Ala delta: DERRAPE sube y FRENO baja. ¡Busca los aros!');
   }
   else if (ev === 'shortcut') hudMsg('¡Atajo! 🚀', true);
+  else if (ev === 'draft') hudMsg('¡Rebufo! 💨', true);
+  else if (ev === 'score') hint('+' + data + ' 🌀');
+  else if (ev === 'bossWarn') { hudMsg('⚡ ¡Cuidado!', true); sfx.count(); }
+  else if (ev === 'drafting') { if (draftHints++ < 2) hint('Rebufo: quédate pegado detrás de un rival para cargar un impulso'); }
   else if (ev === 'current') { if (curHints++ < 2) hint(data === 1 ? 'Corriente a favor: ¡síguela para ir más rápido!' : 'Corriente lateral: ¡te empuja hacia un lado!'); }
   else if (ev === 'out') { if (!data.isPlayer) hint(fill(t('💥 {name} queda fuera · quedan {left}'), data)); sfx.thud?.(0, 0.8); $('hud-total').textContent = '/' + (data.left + (race.player.out ? 1 : 0)); }
   else if (ev === 'rival') { if (race.rival) hint(fill(t(data ? '⚔️ ¡{name} te ha adelantado!' : '⚔️ ¡Has adelantado a {name}!'), race.rival.char)); }
@@ -458,13 +482,14 @@ function updateHud(dt) {
   // modos especiales: cuenta atrás de la eliminación o globos y tiempo de la batalla
   const ru = race.rules;
   if (ru) {
-    const s = Math.max(0, Math.ceil(ru.timer)), key = s * 8 + (p.balloons || 0) + (p.out ? 4 : 0);
+    const s = Math.max(0, Math.ceil(ru.timer)), val = ru.kind === 'battle' ? p.balloons || 0 : ru.kind === 'fever' ? p.bananas : ru.kind === 'stunt' ? p.score : 0, key = s * 100000 + val * 2 + (p.out ? 1 : 0);
     if (lastHud.rk !== key) {
       lastHud.rk = key;
+      const clock = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
       $('hud-mode').textContent = ru.kind === 'elim' ? fill(t('⏱ {s} s · quedan {n}'), { s, n: ru.active().length })
-        : ('🎈'.repeat(Math.max(0, p.balloons)) || '💥') + ' · ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        : ru.kind === 'battle' ? ('🎈'.repeat(Math.max(0, p.balloons)) || '💥') + ' · ' + clock : (ru.kind === 'fever' ? '🍌 ' : '🌀 ') + val + ' · ' + clock;
     }
-    const danger = ru.kind === 'elim' ? ru.danger && race.state === 'racing' : p.balloons === 1;
+    const danger = ru.kind === 'elim' ? ru.danger && race.state === 'racing' : ru.kind === 'battle' && p.balloons === 1;
     if (lastHud.dg !== danger) { lastHud.dg = danger; $('hud-mode').classList.toggle('danger', danger); }
   }
   const wrong = p.wrongT > 1.2 && race.state === 'racing' && mode !== 'battle';
@@ -510,6 +535,16 @@ function showResults() {
     reward = 20 + me.bananas + (record ? 50 : 0);
     if (record) extras.push('récord +50');
     reward += share.timeResult({ time: tm, record, list, extras, track: currentTrack, variant, rec: race.rec, char: save.char, kart: save.kart }) || 0;
+    // medallas: tiempos de bronce, plata y oro de cada circuito (cada una se premia la primera vez)
+    const mt = medalTimes(currentTrack.id);
+    if (mt) {
+      const got = tm <= mt[0] ? 3 : tm <= mt[1] ? 2 : tm <= mt[2] ? 1 : 0, had = save.medals[recKey()] | 0;
+      list.insertAdjacentHTML('beforeend', `<li><b>${['·', '🥉', '🥈', '🥇'][got]}</b><span>${t(got ? MEDAL_NAMES[got] : 'Sin medalla')}</span><span></span><span>${got < 3 ? t(MEDAL_NAMES[got + 1]) + ': ' + fmt(mt[2 - got]) : ''}</span></li>`);
+      if (got > had) {
+        let b = 0; for (let k = had + 1; k <= got; k++) b += MEDAL_REWARD[k];
+        save.medals[recKey()] = got; reward += b; extras.push(fill(t('medalla +{b}'), { b })); if (got === 3) addStat(save, 'goldMedals');
+      }
+    }
     $('r-next').textContent = 'Menú ▶';
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
@@ -522,11 +557,12 @@ function showResults() {
       const li = document.createElement('li'); li.className = (r.isPlayer ? 'me' : '') + (r.isRival ? ' rival' : '') + (r.out ? ' out' : '');
       const extra = mode === 'cup' ? `+${CUP_POINTS[r.pos - 1]} (${cupState.pts[r.char.id]} pts)` : '';
       // en los modos especiales no hay tiempos: globos y golpes, o quién ha sobrevivido
-      const last = !ru ? (r.time ? fmt(r.time) : '—') : ru.kind === 'battle' ? ('🎈'.repeat(r.balloons) || '—') + (r.pops ? ' 💥' + r.pops : '') : t(r.out ? 'Eliminado' : 'Sigue en pie');
+      const last = !ru ? (r.time ? fmt(r.time) : '—') : ru.kind === 'fever' ? '🍌 ' + r.bananas : ru.kind === 'stunt' ? r.score + ' pts' : ru.kind === 'battle' ? ('🎈'.repeat(r.balloons) || '—') + (r.pops ? ' 💥' + r.pops : '') : t(r.out ? 'Eliminado' : 'Sigue en pie');
       li.innerHTML = `<b>${r.pos}º</b><span>${r.name}${r.isPlayer ? t(' (tú)') : ''}</span><span>${extra}</span><span>${last}</span>`;
       list.appendChild(li);
     }
-    if (mode === 'elim') sub = t('Eliminación') + ' · ' + t(sub); else if (mode === 'battle') sub = t('Batalla de globos');
+    const MODE_SUB = { elim: 'Eliminación', battle: 'Batalla de globos', fever: 'Fiebre del plátano', stunt: 'Acrobacias', daily: 'Reto diario' };
+    if (MODE_SUB[mode]) sub = t(MODE_SUB[mode]) + ' · ' + t(sub); else if (mode === 'surprise') sub = t(sub) + ' #' + surprise.surprise; else if (mode === 'boss') sub = '👑 ' + bossNow.name + ' · ' + t(sub);
     reward = Math.round(RACE_REWARD[me.pos - 1] * d.reward) + me.bananas;
     // rival personal: si acabas por delante sube de nivel (y hay premio); si no, afloja
     const rv = res.find(r => r.isRival);
@@ -536,6 +572,18 @@ function showResults() {
       if (won) { s.wins = (s.wins | 0) + 1; addStat(save, 'rivalWins'); const b = Math.round(RIVAL_BONUS * d.reward); reward += b; extras.push(fill(t('rival +{b}'), { b })); } else s.losses = (s.losses | 0) + 1;
     }
     $('r-next').textContent = mode === 'cup' ? (cupState.i < 2 ? 'Siguiente carrera ▶' : 'Ver clasificación ▶') : 'Menú ▶';
+  }
+  if (mode === 'boss') { // duelo contra un jefe: el premio grande se da la primera vez que se le gana
+    const won = me.pos === 1;
+    $('r-title').textContent = won ? '¡Jefe derrotado! 👑' : 'El jefe te ha ganado';
+    if (won && !save.bosses[bossNow.id]) { save.bosses[bossNow.id] = 1; const b = Math.round(BOSS_REWARD * d.reward); reward += b; extras.push(fill(t('jefe +{b}'), { b })); addStat(save, 'bosses'); }
+  } else if (mode === 'daily') { // reto diario: premio una vez al día, mayor con la racha de días seguidos
+    const s = save.daily, ok = me.pos <= 3;
+    $('r-title').textContent = ok ? '¡Reto superado! 📅' : 'Reto no superado';
+    if (ok && s.done !== daily.key) {
+      s.streak = isYesterday(s.done) ? Math.min(DAILY_STREAK_MAX, (s.streak | 0) + 1) : 1; s.done = daily.key;
+      const b = DAILY_REWARD + (s.streak - 1) * DAILY_STREAK_BONUS; reward += b; extras.push(fill(t('reto diario +{b}'), { b })); addStat(save, 'dailies');
+    }
   }
   // misiones (se pagan una sola vez, aquí), estadísticas de por vida y logros
   mctx.finished = true; syncMissions(); renderMissions($('r-missions'), false);
@@ -630,18 +678,19 @@ function segSet(id, cur, on) {
 function buildTracks() {
   const time = mode === 'time';
   if (!time) mode = raceKind;
-  $('tracks-title').textContent = time ? 'Contrarreloj' : mode === 'elim' ? 'Eliminación' : 'Carrera rápida';
+  $('tracks-title').textContent = time ? 'Contrarreloj' : mode === 'elim' ? 'Eliminación' : mode === 'stunt' ? 'Acrobacias' : 'Carrera rápida';
   $('diff-seg').style.visibility = time ? 'hidden' : 'visible';
   $('kind-seg').classList.toggle('hidden', time);
   segSet('kind-seg', raceKind, v => { raceKind = v; buildTracks(); });
   segSet('variant-seg', variant, v => { variant = v; buildTracks(); });
+  segSet('tod-seg', tod, v => { tod = v; buildTracks(); });
   buildDiffSeg($('diff-seg'));
   const box = $('track-cards'); box.innerHTML = ''; box.classList.toggle('mirror', variant === 'mirror');
   for (const t of TRACKS) { // (aquí t es el circuito; los textos los traduce el observador de i18n)
     const ok = trackUnlocked(t), c = document.createElement('button');
     c.className = 'card' + (ok ? '' : ' locked'); c.style.background = cardBg(t);
-    const best = save.best[t.id + (variant ? ':' + variant : '')];
-    c.innerHTML = `${miniSvg(t)}<h3>${ok ? t.name : '🔒 ' + t.name}</h3><p>${ok ? (time ? (best ? '★ ' + fmt(best) : 'Sin tiempo') : CUPS[t.cup].name) : lockText(t.cup)}</p>`;
+    const mk = t.id + (variant ? ':' + variant : ''), best = save.best[mk];
+    c.innerHTML = `${miniSvg(t)}<h3>${ok ? t.name : '🔒 ' + t.name}</h3><p>${ok ? (time ? (best ? ['', '🥉 ', '🥈 ', '🥇 '][save.medals[mk] | 0] + '★ ' + fmt(best) : 'Sin tiempo') : CUPS[t.cup].name) : lockText(t.cup)}</p>`;
     c.onclick = () => { if (!ok) { sfx.deny(); toast(lockText(t.cup)); return; } sfx.ui(); startRace(t.id); };
     box.appendChild(c);
   }
@@ -662,6 +711,40 @@ function buildCups() {
     };
     box.appendChild(c);
   });
+}
+
+// ---------- Más modos: batalla, fiebre del plátano, circuito sorpresa, reto diario y jefes ----------
+function buildModes() {
+  const arenas = EXTRA_TRACKS.filter(a => a.arena || a.id === 'arena'), seg = $('arena-seg');
+  if (!arenas.some(a => a.id === arenaId)) arenaId = arenas[0].id;
+  seg.innerHTML = ''; seg.classList.toggle('hidden', arenas.length < 2);
+  for (const a of arenas) {
+    const b = document.createElement('button'); b.textContent = t(a.name); if (a.id === arenaId) b.className = 'on';
+    b.onclick = () => { arenaId = a.id; sfx.ui(); buildModes(); }; seg.appendChild(b);
+  }
+  daily = dailyChallenge();
+  const arena = trackById(arenaId), dTrack = trackById(daily.track), dDone = save.daily.done === daily.key;
+  const cards = [
+    { icon: '🎈', name: 'Batalla de globos', desc: 'Cada golpe revienta un globo. Gana quien conserve más.', bg: arena, go: () => { mode = 'battle'; startRace(arenaId); } },
+    { icon: '🍌', name: 'Fiebre del plátano', desc: 'Gana quien tenga más plátanos cuando acabe el tiempo.', bg: arena, go: () => { mode = 'fever'; startRace(arenaId); } },
+    { icon: '🎲', name: 'Circuito sorpresa', desc: 'Un circuito nuevo, generado al azar, cada vez.', bg: TRACKS[(daily.key + 3) % TRACKS.length],
+      go: () => { surprise = surpriseTrack(1 + Math.floor(Math.random() * 9998)); mode = 'surprise'; startRace('sorpresa'); } },
+    { icon: daily.mod.icon, name: 'Reto diario', desc: fill(t('{mod} en {track}'), { mod: t(daily.mod.name), track: t(dTrack.name) }),
+      note: dDone ? fill(t('✔ Superado hoy · racha de {n}'), { n: save.daily.streak | 0 }) : fill(t('Queda entre los 3 primeros · +{n} 🍌'), { n: DAILY_REWARD }), bg: dTrack, go: () => { mode = 'daily'; startRace(daily.track); } },
+  ];
+  for (const b of BOSSES) {
+    if (!CUPS[b.cup]) continue;
+    const ok = Object.keys(save.trophies).some(k => k.startsWith(CUPS[b.cup].id + '_'));
+    cards.push({ icon: b.icon, name: fill(t('Jefe: {name}'), b), desc: ok ? b.tip : fill(t('Gana un trofeo en la {cup}'), { cup: t(CUPS[b.cup].name) }), note: save.bosses[b.id] ? '👑 Derrotado' : '',
+      bg: trackById(bossTrack(b)), locked: !ok, go: () => { bossNow = b; mode = 'boss'; startRace(bossTrack(b)); } });
+  }
+  const box = $('mode-cards'); box.innerHTML = '';
+  for (const c of cards) {
+    const el = document.createElement('button'); el.className = 'card' + (c.locked ? ' locked' : ''); el.style.background = cardBg(c.bg);
+    el.innerHTML = `<span class="emoji">${c.icon}</span><h3>${c.locked ? '🔒 ' : ''}${c.name}</h3><p>${c.desc}</p>${c.note ? `<p>${c.note}</p>` : ''}`;
+    el.onclick = () => { if (c.locked) { sfx.deny(); toast(c.desc); return; } sfx.ui(); cupState = null; c.go(); };
+    box.appendChild(el);
+  }
 }
 
 // ---------- Garaje ----------
@@ -785,6 +868,7 @@ function applyControls() {
   hud.style.setProperty('--ctl-a', Math.max(0.3, Math.min(1, +s.btnAlpha || 1)));
   hud.classList.toggle('lefty', !!s.lefty);
 }
+const applyFps = () => $('fps').classList.toggle('hidden', !save.settings.fps);
 function buildSettings() {
   const s = save.settings;
   const seg = (id, key, after) => {
@@ -807,7 +891,7 @@ function buildSettings() {
   seg('set-btnsize', 'btnSize', applyControls);
   // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
   // (cambiar los gráficos a mano anula la reducción automática)
-  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; s.outline = s.quality !== 'baja'; s.autoQ = 0; persist(); resize(); buildSettings(); });
+  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta' || s.quality === 'ultra'; s.outline = s.quality !== 'baja'; s.autoQ = 0; persist(); resize(); buildSettings(); });
   const flag = (id, key, after) => {
     $(id).querySelectorAll('button').forEach(b => {
       const v = b.dataset.v === '1';
@@ -823,6 +907,7 @@ function buildSettings() {
   $('set-autoq-info').textContent = autoN() ? fill('Reducidos ahora: paso {n} de {max}', { n: autoN(), max: AUTO_STEPS }) : '';
   flag('set-haptics', 'haptics', () => { A.setHaptics?.(!!s.haptics); A.haptic?.('hit'); });
   flag('set-lefty', 'lefty', applyControls);
+  flag('set-battery', 'battery'); flag('set-fps', 'fps', applyFps); flag('set-assist', 'assistSteer'); flag('set-autodrift', 'autoDrift');
   $('set-btnalpha').value = s.btnAlpha;
   $('set-bloom').classList.toggle('off', !post.supported);
   $('set-music').value = s.music; $('set-sfx').value = s.sfx;
@@ -833,14 +918,14 @@ function wireUi() {
   // con el juego en pausa no se reactiva el sonido al tocar la pantalla
   document.addEventListener('pointerdown', () => { if (!paused) initAudio(); }, { passive: true });
   // la primera vez se ofrece el tutorial
-  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else { show('menu'); share.afterStart(); } };
+  $('btn-start').onclick = () => { initAudio(); sfx.ui(); startMusic(MENU_MUSIC); goLandscape(); if (!save.tutorial) { save.tutorial = 'seen'; persist(); show('tutoask'); } else { show('menu'); share.afterStart(); } };
   $('tuto-reward').textContent = TUTORIAL.reward;
   $('tuto-yes').onclick = () => { sfx.ui(); startTutorial(); };
   $('tuto-no').onclick = () => { sfx.back(); show('menu'); };
   document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
     sfx.ui(); const g = b.dataset.go;
     if (g === 'race' || g === 'time') { mode = g === 'time' ? 'time' : raceKind; buildTracks(); show('tracks'); }
-    else if (g === 'battle') { mode = 'battle'; cupState = null; startRace('arena'); }
+    else if (g === 'modes') { buildModes(); show('modes'); }
     else if (g === 'cups') { buildCups(); show('cups'); }
     else if (g === 'garage') { gSel = null; show('garage'); buildGarage(); }
     else if (g === 'settings') { buildSettings(); show('settings'); }
@@ -862,7 +947,8 @@ function wireUi() {
     if (confirm(t('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?'))) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); applyControls(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
   };
   $('btn-pause').onclick = () => setPaused(true);
-  $('p-resume').onclick = () => setPaused(false);
+  $('p-resume').onclick = () => { goLandscape(); setPaused(false); };
+  $('rotate').onclick = goLandscape;
   $('p-restart').onclick = () => { sfx.ui(); suspendAudio(false); if (mode === 'cup') { cupState.i = 0; cupState.pts = {}; cupState.ride = {}; startRace(cupState.cup.tracks[0]); } else startRace(currentTrack.id); };
   $('p-quit').onclick = () => { sfx.back(); suspendAudio(false); toMenu(); };
   $('r-retry').onclick = () => { sfx.ui(); startRace(currentTrack.id); };
@@ -955,6 +1041,16 @@ function savePhoto() {
   flash(true);
 }
 
+// El juego es solo horizontal. En móviles se pasa a pantalla completa y se bloquea el giro donde el navegador lo permite
+// (la app instalada y el APK ya vienen bloqueados); donde no, en vertical se muestra el aviso de girar el móvil.
+const isTouch = () => matchMedia('(pointer: coarse)').matches;
+function goLandscape() {
+  if (!isTouch() || window.Capacitor) return;
+  const lock = () => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => { /* no permitido */ }); } catch (e) { /* no soportado */ } };
+  const el = document.documentElement;
+  try { if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen({ navigationUI: 'hide' }).then(lock, lock); else lock(); } catch (e) { lock(); }
+}
+
 function setPaused(on) {
   if (!race || resultsShown) return;
   paused = on;
@@ -964,9 +1060,13 @@ function setPaused(on) {
 
 // ---------- Bucle principal ----------
 let last = performance.now(), tGlobal = 0;
+let fpsN = 0, fpsT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (save.settings.battery && now - last < 30) return; // ahorro de batería: como mucho 30 imágenes por segundo
   const rdt = (now - last) / 1000, dt = Math.min(0.05, rdt); last = now;
+  fpsN++; fpsT += rdt;
+  if (fpsT >= 0.5) { if (save.settings.fps) $('fps').textContent = Math.round(fpsN / fpsT) + ' FPS'; fpsN = fpsT = 0; }
   const ps = renderer.domElement.height * 0.05;
   if (podium.active) {
     podiumT += dt;
@@ -1038,7 +1138,7 @@ wireUi();
 setVolumes(save.settings.music, save.settings.sfx);
 A.setHaptics?.(save.settings.haptics !== false);
 if (save.settings.controls === 'tilt') enableTilt(true);
-applyControls();
+applyControls(); applyFps();
 initI18n();
 share.init({ $, show, toast, sfx, get save() { return save; }, persist, earn, fmt, t, lang, canvas, getRace: () => race, getTrack: () => track, getScreen: () => screen, getMode: () => mode, getVariant: () => variant,
   startTimeTrial: (id, v = '') => { mode = 'time'; variant = v; cupState = null; startRace(id); }, toMenu });
@@ -1052,5 +1152,9 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, get gfx() { return G; }, autoTick: autoQualityTick, renderer, podium, post, showModel: setShowModel, startRace: (id, m = 'race', v = '') => { mode = m; variant = v; if (m === 'race' || m === 'elim') raceKind = m; startRace(id); }, showResults: () => showResults(),
+window.__game = { get race() { return race; }, get track() { return track; }, get save() { return save; }, get missions() { return missions; }, get show() { return showModel; }, get tuto() { return tuto; }, get mode() { return mode; }, get gfx() { return G; }, autoTick: autoQualityTick, renderer, podium, post, showModel: setShowModel, startRace: (id, m = 'race', v = '') => {
+    mode = m; cupState = null;
+    if (m === 'surprise') { surprise = surpriseTrack(+v || 1); v = ''; } else if (m === 'battle' || m === 'fever') arenaId = id; else if (m === 'daily') daily = dailyChallenge(); else if (m === 'boss') bossNow = BOSSES.find(b => b.id === id) || BOSSES[0];
+    variant = v; if (m === 'race' || m === 'elim' || m === 'stunt') raceKind = m; startRace(id);
+  }, showResults: () => showResults(), setTod: v => { tod = v; }, buildModes, get daily() { return daily; },
   startReplay, endReplay, setPhoto, get replaying() { return replaying; }, get photo() { return photo; }, camera };

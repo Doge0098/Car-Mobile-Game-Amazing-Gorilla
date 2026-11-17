@@ -263,3 +263,15 @@ html, body {
 .screen.photo.shot > * { visibility: hidden; }
 .rowbtns { flex-wrap: wrap; } .rowbtns .btn { min-width: 110px; }
 html[lang=en] .help[lang=es], html[lang=es] .help[lang=en] { display: none; }
+
+/* ---------- Solo horizontal, contador de FPS ---------- */
+#rotate { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: linear-gradient(160deg, #3a12a0, #b02a9a); text-align: center; padding: 24px; font-size: 20px; font-style: italic; }
+#rotate p { margin: 0; max-width: 260px; }
+.rot-ico { font-size: 72px; animation: rotph 1.6s ease-in-out infinite; }
+@keyframes rotph { 0%, 25% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
+#fps { position: fixed; left: calc(4px + var(--sa-l)); bottom: calc(2px + var(--sa-b)); z-index: 25; font-size: 11px; font-weight: 600; background: rgba(0, 0, 0, .55); padding: 1px 6px; border-radius: 6px; pointer-events: none; font-variant-numeric: tabular-nums; }
+
+/* ---------- Más modos ---------- */
+#mode-cards .card { min-height: 132px; } #mode-cards .card p { max-width: calc(100% - 56px); }
+#tod-seg button { padding: 6px 9px; font-size: 16px; }

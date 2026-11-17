@@ -1,6 +1,18 @@
 // Progresión: misiones de cada carrera, logros y estadísticas de por vida. Todo va guiado por datos.
 import { CHARACTERS, KARTS, CUPS, TRACKS } from './data.js';
 import { HATS, UPGRADES, UPGRADE_MAX, upgradeLevel } from './shop.js';
+import { BOSSES } from './boss.js';
+
+// ---------- Medallas de la contrarreloj ----------
+// MEDAL_REF: tiempo (s) de una vuelta limpia de referencia en cada circuito; de él salen oro, plata y bronce.
+// (medido con el gorila y el coche iniciales; con mejor coche o buenos derrapes se baja de ahí)
+export const MEDAL_REF = { selva: 92.9, playa: 91.4, volcan: 93.6, hielo: 91.2, neon: 89.7, arcoiris: 90.3, nubes: 93.3, oceano: 102.7, abismo: 92.3 };
+export const MEDAL_NAMES = ['', 'Bronce', 'Plata', 'Oro'], MEDAL_REWARD = [0, 20, 40, 80];
+// Devuelve [oro, plata, bronce] en segundos, o null si el circuito no tiene tiempos (el circuito sorpresa)
+export function medalTimes(trackId) {
+  const ref = MEDAL_REF[trackId];
+  return ref ? [Math.round(ref * 97.5) / 100, Math.round(ref * 103) / 100, Math.round(ref * 110) / 100] : null;
+}
 
 // Sustituye {clave} en un texto: fill('Recoge {n} plátanos', { n: 20 })
 export const fill = (text, vars) => text.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
@@ -12,7 +24,7 @@ const mmss = t => { const m = Math.floor(t / 60), s = Math.floor(t - m * 60); re
 // 'laps' (hay vueltas y meta) y 'course' (aros y turbos del suelo de los circuitos normales).
 export const MODE_CAPS = {
   race: ['rivals', 'items', 'laps', 'course'], cup: ['rivals', 'items', 'laps', 'course'], time: ['laps', 'course'],
-  elim: ['rivals', 'items', 'course'], battle: ['rivals', 'items'], tutorial: null,
+  elim: ['rivals', 'items', 'course'], stunt: ['rivals', 'items', 'course'], battle: ['rivals', 'items'], fever: ['rivals', 'items'], tutorial: null,
 };
 const DEFAULT_CAPS = ['rivals', 'items', 'laps', 'course'];
 export const MISSION_COUNT = { default: 3, time: 2 };  // misiones por carrera según el modo
@@ -37,6 +49,7 @@ export const MISSIONS = [
   { id: 'par', needs: ['laps'], reward: 35, text: 'Termina en menos de {par}', done: c => c.finished && c.time <= c.par, fail: c => c.time > c.par },
   { id: 'nohits', needs: ['rivals'], reward: 40, text: 'No recibas ningún golpe', done: c => c.finished && c.st.hitsTaken === 0, fail: c => c.st.hitsTaken > 0 },
   { id: 'items', needs: ['items'], reward: 25, n: 3, text: 'Usa {n} objetos', value: c => c.st.items },
+  { id: 'drafts', needs: ['rivals', 'laps'], reward: 30, n: 2, text: 'Consigue {n} rebufos', value: c => c.st.drafts || 0 },
   { id: 'hits', needs: ['rivals', 'items'], reward: 35, n: 2, text: 'Golpea a tus rivales {n} veces', value: c => c.st.hitsDealt },
 ];
 
@@ -96,6 +109,10 @@ export const LIFETIME = [
   { id: 'items', name: 'Objetos usados' },
   { id: 'hits', name: 'Golpes a rivales' },
   { id: 'shortcuts', name: 'Atajos usados' },
+  { id: 'drafts', name: 'Rebufos' },
+  { id: 'goldMedals', name: 'Medallas de oro' },
+  { id: 'bosses', name: 'Jefes derrotados' },
+  { id: 'dailies', name: 'Retos diarios superados' },
   { id: 'rivalWins', name: 'Victorias contra tu rival' },
   { id: 'elimWins', name: 'Eliminaciones ganadas' },
   { id: 'battleWins', name: 'Batallas ganadas' },
@@ -128,7 +145,7 @@ export function recordRace(save, r) {
   addStat(save, 'bananas', st.bananas); addStat(save, 'tricks', st.tricks); addStat(save, 'rings', st.rings);
   addStat(save, 'miniturbos', st.miniturbos); addStat(save, 'items', st.items); addStat(save, 'hits', st.hitsDealt);
   if (st.startBoost) addStat(save, 'startBoosts');
-  addStat(save, 'shortcuts', st.shortcuts || 0);
+  addStat(save, 'shortcuts', st.shortcuts || 0); addStat(save, 'drafts', st.drafts || 0);
   addStat(save, 'missions', r.missions || 0); addStat(save, 'time', r.time || 0);
 }
 
@@ -155,6 +172,11 @@ export const ACHIEVEMENTS = [
   { id: 'rival5', icon: '⚔️', name: 'Némesis', desc: 'Acaba 5 veces por delante de tu rival', goal: 5, reward: 120, value: s => stat(s, 'rivalWins') },
   { id: 'elim1', icon: '💥', name: 'Superviviente', desc: 'Gana una carrera de eliminación', goal: 1, reward: 80, value: s => stat(s, 'elimWins') },
   { id: 'battle1', icon: '🎈', name: 'Rey de los globos', desc: 'Gana una batalla de globos', goal: 1, reward: 80, value: s => stat(s, 'battleWins') },
+  { id: 'drafts20', icon: '💨', name: 'A rebufo', desc: 'Consigue 20 rebufos', goal: 20, reward: 80, value: s => stat(s, 'drafts') },
+  { id: 'boss1', icon: '👑', name: 'Cazajefes', desc: 'Derrota a un jefe', goal: 1, reward: 100, value: s => stat(s, 'bosses') },
+  { id: 'bossAll', icon: '🦍', name: 'Rey de la jungla', desc: 'Derrota a todos los jefes', goal: () => BOSSES.filter(b => CUPS[b.cup]).length, reward: 400, value: s => BOSSES.filter(b => CUPS[b.cup] && s.bosses[b.id]).length },
+  { id: 'daily7', icon: '📅', name: 'Constante', desc: 'Supera 7 retos diarios', goal: 7, reward: 200, value: s => stat(s, 'dailies') },
+  { id: 'medalsAll', icon: '🥇', name: 'Contrarrelojista', desc: 'Consigue la medalla de oro en todos los circuitos', goal: () => TRACKS.length, reward: 500, value: s => TRACKS.filter(t => s.medals[t.id] === 3).length },
   { id: 'missions20', icon: '📋', name: 'Cumplidor', desc: 'Completa 20 misiones', goal: 20, reward: 100, value: s => stat(s, 'missions') },
   { id: 'gold1', icon: '🏅', name: 'Oro puro', desc: 'Gana una copa con trofeo de oro', goal: 1, reward: 150, value: goldCups },
   { id: 'goldAll', icon: '👑', name: 'Coleccionista de oro', desc: 'Consigue el oro en todas las copas', goal: () => CUPS.length, reward: 400, value: goldCups },

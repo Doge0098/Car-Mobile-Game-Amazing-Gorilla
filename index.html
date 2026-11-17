@@ -19,6 +19,9 @@
 <canvas id="game"></canvas>
 <div id="speedfx"></div>
 <div id="flash"></div>
+<div id="fps" class="hidden"></div>
+<!-- El juego es solo horizontal: en vertical (móviles y tabletas) se pide girar el aparato -->
+<div id="rotate"><div class="rot-ico">📱</div><p>Gira el móvil para jugar en horizontal</p></div>
 
 <!-- TÍTULO -->
 <section id="s-title" class="screen active">
@@ -41,7 +44,7 @@
     <button class="btn c1" data-go="race">🏁 Carrera rápida</button>
     <button class="btn c2" data-go="cups">🏆 Copas</button>
     <button class="btn c3 half" data-go="time">⏱️ Contrarreloj</button>
-    <button class="btn c9 half" data-go="battle">🎈 Batalla de globos</button>
+    <button class="btn c9 half" data-go="modes">🎮 Más modos</button>
     <button class="btn c4 half" data-go="garage">🦍 Garaje</button>
     <button class="btn c7 half" data-go="meta">🏅 Misiones y logros</button>
     <button class="btn c5 half" data-go="settings">⚙️ Ajustes</button>
@@ -68,7 +71,8 @@
     <div class="seg" id="diff-seg"></div>
   </header>
   <div class="toolbar" id="tracks-bar">
-    <div class="seg" id="kind-seg"><button data-v="race">Carrera</button><button data-v="elim">Eliminación</button></div>
+    <div class="seg" id="tod-seg"><button data-v="">☀️</button><button data-v="dusk">🌇</button><button data-v="night">🌙</button></div>
+    <div class="seg" id="kind-seg"><button data-v="race">Carrera</button><button data-v="elim">Eliminación</button><button data-v="stunt">Acrobacias</button></div>
     <div class="seg" id="variant-seg"><button data-v="">Normal</button><button data-v="mirror">Espejo</button><button data-v="reverse">Inverso</button></div>
   </div>
   <div class="cards" id="track-cards"></div>
@@ -82,6 +86,16 @@
     <div class="seg" id="diff-seg2"></div>
   </header>
   <div class="cards" id="cup-cards"></div>
+</section>
+
+<!-- MÁS MODOS -->
+<section id="s-modes" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Más modos</h2>
+    <div class="seg" id="arena-seg"></div>
+  </header>
+  <div class="cards" id="mode-cards"></div>
 </section>
 
 <!-- GARAJE -->
@@ -133,12 +147,16 @@
     <div class="row"><label>Tamaño de botones</label><div class="seg" id="set-btnsize">
       <button data-v="s">Pequeño</button><button data-v="m">Normal</button><button data-v="l">Grande</button></div></div>
     <div class="row"><label>Modo zurdo</label><div class="seg" id="set-lefty"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Dirección asistida<small>El coche te ayuda a seguir la carretera</small></label><div class="seg" id="set-assist"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Derrape automático<small>Derrapa y hace trucos solo</small></label><div class="seg" id="set-autodrift"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Opacidad de botones</label><input type="range" id="set-btnalpha" min="0.3" max="1" step="0.05"></div>
     <div class="row"><label>Música</label><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Efectos</label><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Gráficos</label><div class="seg" id="set-quality">
-      <button data-v="baja">Bajos</button><button data-v="media">Medios</button><button data-v="alta">Altos</button></div></div>
+      <button data-v="baja">Bajos</button><button data-v="media">Medios</button><button data-v="alta">Altos</button><button data-v="ultra">Ultra</button></div></div>
     <div class="row"><label>Calidad automática<small id="set-autoq-info"></small></label><div class="seg" id="set-autoq"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Ahorro de batería<small>Limita el juego a 30 imágenes por segundo</small></label><div class="seg" id="set-battery"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Contador de FPS</label><div class="seg" id="set-fps"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Contorno cómic</label><div class="seg" id="set-outline"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Resplandor</label><div class="seg" id="set-bloom"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>

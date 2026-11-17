@@ -2,6 +2,9 @@
 import * as THREE from './vendor/three.module.min.js';
 import * as A from './audio.js';
 
+// modos con reglas propias: eliminación, batalla de globos, fiebre del plátano (más plátanos) y acrobacias (más puntos)
+export const RULE_MODES = ['elim', 'battle', 'fever', 'stunt'];
+const TIMERS = { elim: 22, battle: 150, fever: 100, stunt: 100 };
 const BAL_COL = [0xff3b4a, 0xffd21f, 0x22e6ff];
 let balGeo = null, strGeo = null;
 const balMats = BAL_COL.map(c => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.25 }));
@@ -9,9 +12,10 @@ const strMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 export class Rules {
   constructor(race) {
-    this.race = race; this.kind = race.mode; // 'elim' | 'battle'
-    this.outOrder = []; this.timer = this.kind === 'elim' ? 22 : 150; this.period = 16; this.danger = false; this.over = false;
+    this.race = race; this.kind = race.mode; // 'elim' | 'battle' | 'fever' | 'stunt'
+    this.outOrder = []; this.timer = TIMERS[this.kind]; this.period = 16; this.danger = false; this.over = false;
     race.laps = 999;
+    if (this.kind === 'fever') { race.bananaRespawn = 4; race.boxRespawn = 3; }
     if (this.kind === 'battle') {
       race.boxRespawn = 2.8;
       if (!balGeo) { balGeo = new THREE.SphereGeometry(0.42, 10, 8); strGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.5, 4); }
@@ -47,7 +51,7 @@ export class Rules {
   check() {
     const race = this.race, p = race.player, act = this.active();
     if (this.over || race.state !== 'racing') return;
-    if (p.out || act.length <= 1 || (this.kind === 'battle' && this.timer <= 0)) {
+    if (p.out || act.length <= 1 || (this.kind !== 'elim' && this.timer <= 0)) {
       this.over = true; race.ranking();
       p.finished = true; p.finishTime = race.time; race.state = 'finished'; race.stateT = 0;
       race.emit('finish', p.pos);
@@ -79,7 +83,10 @@ export class Rules {
   // Clasificación propia del modo
   rank() {
     const act = this.active();
-    if (this.kind === 'battle') act.sort((a, b) => b.balloons - a.balloons || (b.pops || 0) - (a.pops || 0) || (b.isPlayer ? 1 : 0) - (a.isPlayer ? 1 : 0)); // en los empates, el jugador delante
+    const me = (a, b) => (b.isPlayer ? 1 : 0) - (a.isPlayer ? 1 : 0);
+    if (this.kind === 'fever') act.sort((a, b) => b.bananas - a.bananas || me(a, b));
+    else if (this.kind === 'stunt') act.sort((a, b) => b.score - a.score || me(a, b));
+    else if (this.kind === 'battle') act.sort((a, b) => b.balloons - a.balloons || (b.pops || 0) - (a.pops || 0) || (b.isPlayer ? 1 : 0) - (a.isPlayer ? 1 : 0)); // en los empates, el jugador delante
     else act.sort((a, b) => b.prog - a.prog);
     const arr = act.concat(this.outOrder.slice().reverse());
     arr.forEach((r, i) => { r.pos = i + 1; });

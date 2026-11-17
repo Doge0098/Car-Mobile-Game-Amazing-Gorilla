@@ -6,7 +6,8 @@ import { makeGorilla, makeKart, mountGorilla, makeModeRigs, animateGorilla, anim
 import { addOutline } from './outline.js';
 import { SkidMarks, Trail, Weather, Hazards, Underwater } from './world.js';
 import { tryShortcut, stepFlight, applyCurrents, gliderAlt } from './extras.js';
-import { Rules } from './rules.js';
+import { Rules, RULE_MODES } from './rules.js';
+import { bossTick } from './boss.js';
 import { Replay } from './replay.js';
 
 const sfx = A.sfx;
@@ -60,7 +61,8 @@ class Racer {
     this.mk = [{ on: false, x: 0, y: 0, z: 0 }, { on: false, x: 0, y: 0, z: 0 }];
     this.out = false; this.flight = null; this.alt = 0; this.inCurrent = 0; this.isRival = false;
     // estadísticas de la carrera (misiones, logros, tutorial)
-    this.st = { tricks: 0, rings: 0, miniturbos: 0, items: 0, hitsDealt: 0, hitsTaken: 0, bananas: 0, startBoost: false, pads: 0,
+    this.draftT = 0; this.score = 0;
+    this.st = { tricks: 0, rings: 0, miniturbos: 0, items: 0, hitsDealt: 0, hitsTaken: 0, bananas: 0, startBoost: false, pads: 0, drafts: 0, shortcuts: 0,
       offT: 0, offMax: 0, offCur: 0, bestPos: slot + 1, overtakes: 0, topSpeed: 0 };
     // IA
     this.lane = (Math.random() - 0.5) * tr.hw * 1.1; this.ph = Math.random() * 6.28;
@@ -75,6 +77,7 @@ class Racer {
     this.rigs = makeModeRigs(); this.tilt.add(this.rigs.glider, this.rigs.boat, this.rigs.sub);
     this.outlines = []; this.olOn = true; this.tilt.traverse(o => { if (o.userData.isOutline) this.outlines.push(o); });
     if (race.shadows) this.tilt.traverse(o => { if (o.isMesh && !o.userData.isOutline && !o.material.transparent) o.castShadow = true; });
+    if (race.night) { const beam = new THREE.Mesh(race.beamGeo, race.beamMat); beam.position.set(0, 0.95, 1.6); this.tilt.add(beam); }
     this.shadow = blobShadow(); this.pitchG.add(this.shadow);
     this.shadow.visible = !race.shadows || tr.unlitRoad;
     this.shield = new THREE.Mesh(race.shieldGeo, race.shieldMat); this.shield.position.y = 1.3; this.shield.visible = false;
@@ -155,14 +158,14 @@ class Racer {
     this.steer += (steer - this.steer) * Math.min(1, dt * 12);
     if (!this.drifting) {
       if (ctl.drift && !spinning && !air && !gliding && Math.abs(steer) > 0.25 && this.speed > 24) {
-        this.drifting = true; this.driftDir = Math.sign(steer); this.charge = 0; this.hopV = 4.2;
+        this.drifting = true; this.driftDir = Math.sign(steer); this.charge = 0; this.hopV = 4.2 * race.grav / 30;
       }
     } else {
       this.charge += dt * (0.75 + 0.5 * Math.max(0, steer * this.driftDir));
       if (!ctl.drift || this.speed < 16 || spinning) {
         const lvl = this.driftLevel();
         if (lvl > 0 && !spinning && this.speed >= 16) {
-          this.boost([0, 0.7, 1.25, 1.9][lvl]); this.st.miniturbos++;
+          this.boost([0, 0.7, 1.25, 1.9][lvl]); this.st.miniturbos++; race.addScore(this, [0, 30, 60, 100][lvl]);
           if (this.isPlayer) { sfx.miniturbo(); A.haptic?.('boost'); }
           fx.add.burst(this.x, this.y + 0.6, this.z, 16, DRIFT_COLORS[lvl], 8, 7, 0.4);
         }
@@ -193,7 +196,7 @@ class Racer {
     // salto (en el ala delta la altura la marca el tramo)
     if (gliding) { this.hopV = 0; this.air = false; }
     else if (this.hopY > 0 || this.hopV > 0) {
-      this.hopV -= 30 * dt; this.hopY += this.hopV * dt;
+      this.hopV -= race.grav * dt; this.hopY += this.hopV * dt;
       if (this.hopY <= 0) {
         this.hopY = 0; this.hopV = 0;
         if (this.air) {
@@ -201,7 +204,7 @@ class Racer {
           fx.norm.burst(this.x, this.y + 0.3, this.z, 10, race.dustColor, 6, 12, 0.5, 3);
           if (this.isPlayer) { sfx.land?.(); A.haptic?.('land'); }
           if (this.trickDone && !spinning) {
-            this.boost(1.15); this.st.tricks++;
+            this.boost(1.15); this.st.tricks++; race.addScore(this, 100);
             fx.add.burst(this.x, this.y + 0.8, this.z, 20, [0x22e6ff, 0xffe45a, 0xffffff], 10, 8, 0.5);
             if (this.isPlayer) { sfx.trick?.(); race.emit('trick'); }
           }
@@ -222,7 +225,7 @@ class Racer {
       if (vn * sg > 0) { this.vx -= s.nx * vn; this.vz -= s.nz * vn; }
       this.speed -= this.speed * 1.2 * dt;
     }
-    this.lat = lat; this.off = Math.abs(lat) > tr.hw + 1.6 && !s.zone;
+    this.lat = lat; this.off = Math.abs(lat) > tr.hw + 1.6 && !s.zone && !(s.fw && Math.abs(lat - s.fk) < s.fw + 0.9);
     this.y = tr.yAt(this.x, this.z, ni);
     if (race.state === 'racing' && !this.finished) {
       const st = this.st;
@@ -243,7 +246,7 @@ class Racer {
       if (rg.cd[this.slot] > 0) { rg.cd[this.slot] -= dt; continue; }
       let di = ni - rg.idx; if (di < -N / 2) di += N;
       if (di >= 0 && di <= 1 && Math.abs(lat - rg.lat) < 3.4 && (!rg.air || Math.abs(this.y + this.hopY + 1 - rg.y) < 2.2)) {
-        rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++; this.st.rings++; this.st.bananas++;
+        rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++; this.st.rings++; this.st.bananas++; race.addScore(this, 40);
         fx.add.burst(rg.x, rg.y, rg.z, 22, [0xffd21f, 0xffffff, 0x22e6ff], 12, 9, 0.5);
         race.shock(rg.x, rg.y, rg.z, 0xffffff, 9, 0.4);
         if (this.isPlayer) { sfx.trick?.(); A.haptic?.('boost'); race.emit('ring'); }
@@ -252,7 +255,7 @@ class Racer {
 
     // atajo: el trampolín del arcén lanza el coche por encima de la curva
     if (tr.shortcut && !spinning && tryShortcut(this, tr)) {
-      this.st.shortcuts = (this.st.shortcuts || 0) + 1; this.air = false; this.trickT = TRICK_T; this.trickDir = -tr.shortcut.side;
+      this.st.shortcuts = (this.st.shortcuts || 0) + 1; race.addScore(this, 80); this.air = false; this.trickT = TRICK_T; this.trickDir = -tr.shortcut.side;
       fx.add.burst(this.x, this.y + 0.8, this.z, 18, [0x35e08a, 0xffffff], 10, 9, 0.5);
       if (this.isPlayer) { sfx.ramp?.(); A.haptic?.('boost'); race.emit('shortcut'); }
     }
@@ -299,7 +302,7 @@ class Racer {
       if ((di > 7 || di < -7) && this.magnetT <= 0) continue;
       const dx = this.x - b.px, dz = this.z - b.pz;
       if (dx * dx + dz * dz < 5.3 * this.sizeK) {
-        b.active = false; b.timer = 14; this.bananas++; this.st.bananas++;
+        b.active = false; b.timer = race.bananaRespawn || 14; this.bananas++; this.st.bananas++;
         if (this.isPlayer) { sfx.coin(); fx.add.burst(b.px, this.y + 1.2, b.pz, 8, 0xffe21f, 5, 5, 0.35); }
       }
     }
@@ -309,7 +312,7 @@ class Racer {
       if (dx * dx + dz * dz < 6.5 && this.hopY < 2.4) {
         b.active = false; b.timer = race.boxRespawn || 3.5; b.mesh.visible = false;
         fx.add.burst(b.x, b.y + 1.5, b.z, 22, [0xff4fd8, 0xffd21f, 0x22e6ff, 0xffffff], 10, 8, 0.5, 8);
-        if (!this.item && this.rolling <= 0 && !this.finished && (this.isPlayer || race.aiItems !== false)) { this.rolling = 1.3; }
+        if (!this.item && this.rolling <= 0 && !this.finished && !this.isBoss && (this.isPlayer || race.aiItems !== false)) { this.rolling = 1.3; }
         if (this.isPlayer || this.near()) race.shock(b.x, b.y + 1.5, b.z, 0xffe45a, 4.5);
         if (this.isPlayer) sfx.tick();
       }
@@ -349,7 +352,7 @@ class Racer {
     if (md === 'glide') ty.z += (-this.steer * 0.38 - ty.z) * Math.min(1, dt * 6);
     else if (md === 'boat') { ty.z += Math.sin(t * 2.6 + this.ph) * 0.0015; ty.x += Math.sin(t * 3.2 + this.ph) * 0.03; }
     this.tilt.position.y = this.hopY + this.bob;
-    const targetSize = this.furyT > 0 ? 1.38 : this.shrinkT > 0 ? 0.55 : 1;
+    const targetSize = (this.furyT > 0 ? 1.38 : this.shrinkT > 0 ? 0.55 : 1) * (this.baseSize || 1);
     this.sizeK += (targetSize - this.sizeK) * Math.min(1, dt * 6);
     this.tilt.scale.setScalar(this.sizeK);
     this.shadow.scale.setScalar(this.sizeK * (1 - Math.min(0.5, this.hopY * 0.12)));
@@ -417,6 +420,10 @@ class Racer {
         if (Math.random() < 0.4) fx.norm.emit(px, y + 0.3, pz, (Math.random() - 0.5) * 2, 1.5, (Math.random() - 0.5) * 2, 0xffffff, 9, 0.5, 0, 1.5);
       }
     }
+    if (this.draftT > 0.25 && Math.random() < 0.8) { // rebufo: rayas de viento que llegan desde el coche de delante
+      const k = 4 + Math.random() * 9, sd = (Math.random() - 0.5) * 2.6;
+      fx.add.emit(this.x + f[0] * k + l[0] * sd, y + 0.5 + Math.random() * 1.6, this.z + f[1] * k + l[1] * sd, -f[0] * 30, 0, -f[1] * 30, 0xcff6ff, 4 + this.draftT * 4, 0.22);
+    }
     if (this.inCurrent && Math.random() < 0.7) {
       const [px, pz] = rear((Math.random() - 0.5) * 2, 2.4);
       fx.norm.emit(px, y + this.bob + 0.6, pz, -f[0] * 6, 1.5 + Math.random() * 2, -f[1] * 6, 0xdff8ff, 6 + Math.random() * 5, 0.6, -1);
@@ -452,6 +459,7 @@ export class Race {
     Object.assign(this, opts);
     this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
+    this.grav = 30 * (def.gravity || 1) * (this.gravityK || 1); this.adT = 0; // gravedad de los saltos (menor en el espacio)
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
     this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = []; this.shocks = [];
     this.windColor = def.theme.fxColor;
@@ -459,6 +467,10 @@ export class Race {
     this.pressT = -99; this.goWindow = 0; this.prevDrift = false; this.voiceCd = 0;
     this.glowK = this.bloom ? 1.5 : 1;
     this.dustColor = def.theme.ground2; this.markColor = ex.mark; this.rutColor = new THREE.Color(def.theme.ground2).multiplyScalar(0.55).getHex();
+    if (this.night) { // haz de los faros (cono con la punta en el coche)
+      this.beamGeo = new THREE.ConeGeometry(2.4, 13, 14, 1, true); this.beamGeo.translate(0, -6.5, 0); this.beamGeo.rotateX(-Math.PI / 2);
+      this.beamMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+    }
     this.shieldGeo = new THREE.SphereGeometry(2.05, 14, 10);
     this.shieldMat = new THREE.MeshBasicMaterial({ color: 0x35e08a, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
     this.peelGeo = new THREE.ConeGeometry(0.8, 0.55, 5);
@@ -481,10 +493,14 @@ export class Race {
       if (isP) { this.racers.push(new Racer(this, slot, pc, pk, KART_COLORS[this.playerColor] || null, true)); this.racers[i].colorIdx = this.playerColor; }
       else {
         const rv = lineup[i];
-        this.racers.push(new Racer(this, slot, charById(rv.char), kartById(rv.kart), KART_COLORS[rv.color] || null, false)); this.racers[i].colorIdx = rv.color;
+        const o = new Racer(this, slot, rv.charDef || charById(rv.char), kartById(rv.kart), KART_COLORS[rv.color] || null, false);
+        o.colorIdx = rv.color; o.baseSize = rv.size || this.rivalSize || 1;
+        if (rv.boss) { o.isBoss = true; o.bossDef = rv.boss; o.skill = 0.03; this.boss = o; } // jefe: más rápido y con su truco (boss.js)
+        this.racers.push(o);
       }
     }
     this.player = this.racers[total - 1];
+    if (this.assistSteer) this.player.lane = 0;
     this.live = this.racers; // corredores que siguen en juego (los modos con eliminación van quitando)
     // rival personal: opts.rivalDef = { char, level }; se adapta al nivel del jugador
     this.rival = null; this.rivalAhead = null;
@@ -502,6 +518,12 @@ export class Race {
       this.player.item = 'turbo'; this.player.itemCount = 3;
       for (const b of tr.itemBoxes) { b.active = false; b.timer = 1e9; b.mesh.visible = false; }
       this.rec = []; this.recT = 0;
+      if (this.paceTime > 0) { // liebre dorada: marca el ritmo del tiempo de oro
+        this.paceMat = new THREE.MeshBasicMaterial({ color: 0xffd21f, transparent: true, opacity: 0.3, depthWrite: false });
+        this.pace = new THREE.Group();
+        const k = makeKart(pk, null, this.paceMat), g2 = mountGorilla(k, makeGorilla(pc, this.paceMat, false));
+        animateGorilla(g2, 0, {}); this.pace.add(k, g2); this.pace.visible = false; this.scene.add(this.pace);
+      }
       if (this.ghostData && this.ghostData.length > 6) {
         const gm = new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.32, depthWrite: false });
         this.ghost = new THREE.Group(); this.ghostIdx = this.player.idx;
@@ -513,7 +535,7 @@ export class Race {
     this.camH = this.player.h; this.camY = this.player.y;
     // en los mapas que empiezan en el agua los coches salen ya transformados
     for (const r of this.racers) { const z = tr.samples[r.idx].zone; if (z && z !== 'glide') this.setMode(r, z, true); }
-    this.rules = this.mode === 'elim' || this.mode === 'battle' ? new Rules(this) : null;
+    this.rules = RULE_MODES.includes(this.mode) ? new Rules(this) : null;
     this.replay = new Replay(this); this.replaying = false;
     this.ranking();
     for (const r of this.racers) r.prevPos = r.pos;
@@ -567,7 +589,11 @@ export class Race {
     return arr;
   }
 
+  // puntos del modo Acrobacias
+  addScore(r, n) { if (this.mode === 'stunt' && n > 0 && this.state === 'racing') { r.score += n; if (r.isPlayer) this.emit('score', n); } }
+
   rollItem(r) {
+    if (this.forceItem) return this.forceItem;
     if (this.rules) { const key = this.rules.rollItem(r); if (key) return key; }
     const n = this.racers.length, k = n > 1 ? (r.pos - 1) / (n - 1) : 0, first = r.pos === 1;
     const w = {
@@ -675,6 +701,8 @@ export class Race {
     for (const h of this.hazards.list) if (h.harm) dodge(h.x, h.z, 3);
     const sA = S[(r.idx + look) % N], room = Math.min(tr.hw, sA.lim) - 1.6;
     lane = clamp(lane, -room, room);
+    // algunos rivales cogen el carril de la bifurcación
+    if (sA.fw && !r.isPlayer && (((Math.floor(r.prog / N) * 5 + r.slot * 2) % 4) + 4) % 4 < (this.difficulty.ai > 0.95 ? 2 : 1)) lane = sA.fk;
     let tx = sA.x + sA.nx * lane, tz = sA.z + sA.nz * lane;
     // algunos rivales se desvían hacia el trampolín del atajo (más a menudo en difícil)
     const sc = tr.shortcut;
@@ -689,7 +717,7 @@ export class Race {
     // goma elástica respecto al jugador
     const p = this.player;
     let band = 0;
-    if (!r.isPlayer) band = clamp((p.prog - r.prog) * tr.spacing / 420, r.isRival ? -0.065 : -0.08, r.isRival ? 0.075 : 0.05); // el rival personal no se queda atrás
+    if (!r.isPlayer) band = clamp((p.prog - r.prog) * tr.spacing / 420, r.isBoss ? -0.07 : r.isRival ? -0.065 : -0.08, r.isBoss ? 0.1 : r.isRival ? 0.075 : 0.05); // el rival personal no se queda atrás
     const maxK = r.isPlayer ? 0.9 : this.difficulty.ai + r.skill + band;
     // truco en los saltos
     let trick = false;
@@ -729,7 +757,7 @@ export class Race {
     return order.map((r, i) => ({
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
       time: this.rules ? 0 : r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
-      out: !!r.out, balloons: r.balloons || 0, pops: r.pops || 0, isRival: r.isRival,
+      out: !!r.out, balloons: r.balloons || 0, pops: r.pops || 0, isRival: r.isRival, score: r.score,
     }));
   }
 
@@ -767,7 +795,18 @@ export class Race {
       let ctl;
       if (!moving) ctl = null;
       else if (r.isPlayer && !r.finished) {
-        ctl = { steer: input.steer, accel: !input.brake, brake: input.brake, drift: input.drift, trick: driftEdge };
+        let st = input.steer, dr = input.drift, tk = driftEdge;
+        // ayudas de conducción: la dirección asistida sigue la carretera; el derrape automático derrapa y hace trucos solo
+        if (this.assistSteer || this.autoDrift) {
+          const ai = this.aiControl(r, dt);
+          if (this.assistSteer) st = clamp(st * 0.8 + ai.steer * (Math.abs(st) < 0.15 ? 0.9 : 0.35), -1, 1);
+          if (this.autoDrift && !r.mode) {
+            if (!r.drifting) { this.adT = Math.abs(st) > 0.6 && r.speed > 30 ? this.adT + dt : 0; if (this.adT > 0.25) dr = true; }
+            else dr = dr || (Math.abs(st) > 0.3 && r.charge < 1.75);
+            if (r.air && r.hopY > 1.2 && !r.trickDone) tk = true;
+          }
+        }
+        ctl = { steer: st, accel: !input.brake, brake: input.brake, drift: dr, trick: tk };
         if (input.itemPressed && r.item) this.useItem(r);
         else if ((input.itemPressed && r.rolling <= 0) || input.hornPressed) this.honk(r); // sin objeto, el botón toca la bocina
       } else ctl = this.aiControl(r, dt);
@@ -801,6 +840,7 @@ export class Race {
     // cáscaras
     for (let i = this.peels.length - 1; i >= 0; i--) {
       const pe = this.peels[i]; pe.age += dt; pe.mesh.rotation.y += dt * 2;
+      if (pe.ttl && pe.age > pe.ttl) { this.scene.remove(pe.mesh); this.peels.splice(i, 1); continue; } // las llamas del jefe se apagan solas
       for (const r of L) {
         if (r === pe.owner && pe.age < 0.8) continue;
         if ((r.x - pe.x) ** 2 + (r.z - pe.z) ** 2 < 4.4 && r.hopY < 1) {
@@ -832,7 +872,7 @@ export class Race {
     // barriles rodantes: rebotan de lado a lado
     for (let i = this.barrels.length - 1; i >= 0; i--) {
       const b = this.barrels[i]; b.age += dt;
-      b.prog += 80 / tr.spacing * dt; b.lat += b.vlat * dt;
+      b.prog += (b.sp ?? 80) / tr.spacing * dt; b.lat += b.vlat * dt;
       posOn(b.prog, b.lat, q);
       const room = Math.min(tr.hw, q.s.lim) - 1;
       if (Math.abs(b.lat) > room) {
@@ -871,8 +911,26 @@ export class Race {
       }
     }
 
+    // rebufo: ir pegado detrás de otro coche carga un impulso
+    if (this.state === 'racing') for (const r of L) {
+      if (r.finished || r.mode === 'glide' || r.flight || r.spinT > 0 || r.speed < 38 || r.boostT > 0.3) { r.draftT = 0; continue; }
+      const fx0 = Math.sin(r.h), fz0 = Math.cos(r.h); let ok = false;
+      for (const o of L) {
+        if (o === r || o.speed < 30) continue;
+        const dx = o.x - r.x, dz = o.z - r.z, ahead = dx * fx0 + dz * fz0;
+        if (ahead > 3.5 && ahead < 17 && Math.abs(dx * fz0 - dz * fx0) < 2.3 && Math.abs(o.hopY - r.hopY) < 2) { ok = true; break; }
+      }
+      const was = r.draftT;
+      r.draftT = ok ? r.draftT + dt : Math.max(0, r.draftT - dt * 2);
+      if (r.isPlayer && was <= 0.3 && r.draftT > 0.3) this.emit('drafting');
+      if (r.draftT > 1.3) {
+        r.draftT = 0; r.boost(1.0); r.st.drafts++;
+        if (r.isPlayer) { sfx.boost(); A.haptic?.('boost'); this.emit('draft'); }
+      }
+    }
     if (moving) this.hazards.update(dt, this.t, this);
     if (this.rules) this.rules.update(dt);
+    if (this.boss && moving) bossTick(this, dt);
 
     // adelantamientos: burla del que pasa y enfado del adelantado
     this.ranking();
@@ -897,6 +955,11 @@ export class Race {
     if (this.mode === 'time' && this.state === 'racing') {
       this.recT -= dt;
       if (this.recT <= 0) { this.recT += 0.1; this.rec.push(Math.round(p.x * 10) / 10, Math.round(p.z * 10) / 10, Math.round(p.h * 100) / 100); }
+    }
+    if (this.pace) {
+      const f = clamp(this.time / this.paceTime, 0, 1) * this.laps * N, i0 = Math.floor(f) % N, fr = f - Math.floor(f), a = S[i0], b = S[(i0 + 1) % N];
+      this.pace.position.set(a.x + (b.x - a.x) * fr, a.y + (b.y - a.y) * fr + a.air, a.z + (b.z - a.z) * fr); this.pace.rotation.y = a.h;
+      this.pace.visible = this.state === 'racing' && this.time < this.paceTime;
     }
     if (this.ghost) {
       const g = this.ghostData, fi = this.time / 0.1, i0 = Math.floor(fi), n = g.length / 3;
@@ -932,8 +995,13 @@ export class Race {
       w.mesh.scale.setScalar(0.4 + k * w.r); w.mesh.material.opacity = 0.9 * (1 - k); if (cam.quaternion) w.mesh.quaternion.copy(cam.quaternion);
       if (k >= 1) { this.scene.remove(w.mesh); w.mesh.material.dispose(); this.shocks.splice(i, 1); }
     }
-    // ráfagas que pasan junto a la cámara a gran velocidad
     const p = this.player;
+    if (this.night && !this.underwater.on && Math.random() < dt * 0.9) { // fuegos artificiales
+      const a = p.h + (Math.random() - 0.5) * 1.7, d = 90 + Math.random() * 130;
+      const c = [[0xff4fd8, 0xffffff], [0xffd21f, 0xff7a1a], [0x22e6ff, 0xffffff], [0x35e08a, 0xd6ff5a]][Math.floor(Math.random() * 4)];
+      this.fx.add.burst(p.x + Math.sin(a) * d, p.y + 45 + Math.random() * 40, p.z + Math.cos(a) * d, 46, c, 26, 16, 1.5, 9);
+    }
+    // ráfagas que pasan junto a la cámara a gran velocidad
     if (p.speed > p.maxSpeed * 0.9 && !this.underwater.on && Math.random() < 0.7) {
       const f0 = Math.sin(p.h), f1 = Math.cos(p.h), d = 30 + Math.random() * 25, o = (Math.random() - 0.5) * 26;
       this.fx.add.emit(p.x + f0 * d + f1 * o, p.y + p.hopY + 0.6 + Math.random() * 6, p.z + f1 * d - f0 * o, -f0 * 22, 0, -f1 * 22, this.windColor, 4 + Math.random() * 3, 0.7);
@@ -1000,6 +1068,7 @@ export class Race {
     this.hazards.dispose(); this.weather.dispose(); this.marks.dispose();
     for (const r of this.racers) r.trail.dispose();
     if (this.rivalTag) this.rivalTag.material.dispose();
+    for (const o of [this.beamGeo, this.beamMat, this.fireMat, this.paceMat]) if (o) o.dispose();
     for (const b of this.bolts) { b.line.geometry.dispose(); b.line.material.dispose(); }
     this.shieldGeo.dispose(); this.shieldMat.dispose(); this.peelGeo.dispose(); this.cocoGeo.dispose(); this.waveGeo.dispose();
   }
