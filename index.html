@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Amazing Gorilla Racing</title>
+<meta name="description" content="Carreras arcade de gorilas al volante. Juega sin conexión.">
+<meta name="theme-color" content="#1a0b3a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gorilla Racing">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="speedfx"></div>
+<div id="flash"></div>
+
+<!-- TÍTULO -->
+<section id="s-title" class="screen active">
+  <div class="logo">
+    <span class="logo-top">AMAZING</span>
+    <span class="logo-main">GORILLA</span>
+    <span class="logo-sub">RACING</span>
+  </div>
+  <button id="btn-start" class="btn big pulse">¡A CORRER!</button>
+  <p class="hint">Carreras de gorilas · sin conexión</p>
+</section>
+
+<!-- MENÚ -->
+<section id="s-menu" class="screen">
+  <header class="topbar">
+    <div class="logo small"><span class="logo-main">GORILLA</span><span class="logo-sub">RACING</span></div>
+    <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
+  </header>
+  <nav class="menu">
+    <button class="btn c1" data-go="race">🏁 Carrera rápida</button>
+    <button class="btn c2" data-go="cups">🏆 Copas</button>
+    <button class="btn c3" data-go="time">⏱️ Contrarreloj</button>
+    <button class="btn c4" data-go="garage">🦍 Garaje</button>
+    <button class="btn c5" data-go="settings">⚙️ Ajustes</button>
+    <button class="btn c6 hidden" id="btn-install">📲 Instalar juego</button>
+  </nav>
+</section>
+
+<!-- SELECCIÓN DE MAPA -->
+<section id="s-tracks" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2 id="tracks-title">Elige mapa</h2>
+    <div class="seg" id="diff-seg"></div>
+  </header>
+  <div class="cards" id="track-cards"></div>
+</section>
+
+<!-- COPAS -->
+<section id="s-cups" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Copas</h2>
+    <div class="seg" id="diff-seg2"></div>
+  </header>
+  <div class="cards" id="cup-cards"></div>
+</section>
+
+<!-- GARAJE -->
+<section id="s-garage" class="screen">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Garaje</h2>
+    <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
+  </header>
+  <div class="garage-panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="chars">Gorilas</button>
+      <button class="tab" data-tab="karts">Coches</button>
+      <button class="tab" data-tab="colors">Color</button>
+    </div>
+    <div class="strip" id="garage-strip"></div>
+    <div class="info">
+      <div class="info-text">
+        <h3 id="g-name">Bongo</h3>
+        <p id="g-desc"></p>
+      </div>
+      <div class="stats" id="g-stats"></div>
+      <button class="btn c1" id="g-action">Elegir</button>
+    </div>
+  </div>
+</section>
+
+<!-- AJUSTES -->
+<section id="s-settings" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Ajustes</h2><span></span>
+  </header>
+  <div class="settings">
+    <div class="row"><label>Controles</label><div class="seg" id="set-controls">
+      <button data-v="buttons">Botones</button><button data-v="tilt">Inclinar móvil</button></div></div>
+    <div class="row"><label>Música</label><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Efectos</label><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
+    <div class="row"><label>Gráficos</label><div class="seg" id="set-quality">
+      <button data-v="baja">Bajos</button><button data-v="media">Medios</button><button data-v="alta">Altos</button></div></div>
+    <div class="row"><label>Progreso</label><button class="btn small danger" id="set-reset">Borrar partida</button></div>
+    <p class="help">
+      <b>Cómo jugar:</b> el coche acelera solo. Gira con ◀ ▶ (o inclinando el móvil), mantén <b>DERRAPE</b> en las curvas
+      y suéltalo para un mini-turbo (chispas azules → naranjas → moradas). Coge cajas <b>?</b> y pulsa el objeto para usarlo.
+      Los plátanos 🍌 te hacen más rápido y sirven para comprar en el garaje.<br>
+      <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, P = pausa.<br>
+      <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
+      En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
+    </p>
+  </div>
+</section>
+
+<!-- HUD -->
+<section id="hud" class="screen hud">
+  <div class="hud-pos"><span id="hud-pos">1</span><small id="hud-pos-suf">º</small><i id="hud-total">/6</i></div>
+  <div class="hud-lap">Vuelta <b id="hud-lap">1</b>/<span id="hud-laps">3</span></div>
+  <div class="hud-item" id="hud-item"><span id="hud-item-icon"></span><em id="hud-item-count"></em></div>
+  <div class="hud-right">
+    <button class="btn pause" id="btn-pause">❚❚</button>
+    <div class="hud-time" id="hud-time">0:00.00</div>
+    <div class="hud-bananas">🍌 <b id="hud-bananas">0</b></div>
+    <canvas id="minimap" width="140" height="140"></canvas>
+  </div>
+  <div class="hud-msg" id="hud-msg"></div>
+  <div class="hud-warn hidden" id="hud-wrong">↩ ¡Sentido contrario!</div>
+  <div class="drift-meter"><div id="drift-fill"></div></div>
+  <div class="controls">
+    <div class="ctl-left" id="ctl-steer">
+      <button class="ctl" id="btn-left">◀</button>
+      <button class="ctl" id="btn-right">▶</button>
+    </div>
+    <div class="ctl-right">
+      <button class="ctl sm" id="btn-brake">FRENO</button>
+      <button class="ctl item" id="btn-item">OBJETO</button>
+      <button class="ctl drift" id="btn-drift">DERRAPE</button>
+    </div>
+  </div>
+</section>
+
+<!-- PAUSA -->
+<section id="s-pause" class="screen modal">
+  <div class="box">
+    <h2>Pausa</h2>
+    <button class="btn c1" id="p-resume">▶ Continuar</button>
+    <button class="btn c3" id="p-restart">↻ Reiniciar</button>
+    <button class="btn c5" id="p-quit">✕ Salir al menú</button>
+  </div>
+</section>
+
+<!-- RESULTADOS -->
+<section id="s-results" class="screen modal">
+  <div class="box wide">
+    <h2 id="r-title">Resultados</h2>
+    <p id="r-sub"></p>
+    <ol id="r-list" class="results"></ol>
+    <div class="reward" id="r-reward"></div>
+    <div class="rowbtns">
+      <button class="btn c3" id="r-retry">↻ Repetir</button>
+      <button class="btn c1" id="r-next">Continuar ▶</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast"></div>
+<div id="loading" class="hidden"><div class="spinner">🍌</div><p>Cargando…</p></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
