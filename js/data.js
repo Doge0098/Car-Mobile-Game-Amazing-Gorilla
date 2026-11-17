@@ -244,8 +244,9 @@ export const TRACKS = [
   },
   {
     // Copa Galaxia · estación espacial: dos paseos espaciales largos en ala delta, túnel de cristal y poca gravedad
-    id: 'estacion', name: 'Estación Estelar', cup: 3, R: 330, width: 15.5, gravity: 0.45,
-    waves: [[3, 0.117, 0.72], [4, 0.063, 5.54], [7, 0.04, 4.22]], seed: 139,
+    // (con poca gravedad los saltos son largos: tras cada rampa hay sitio libre, sin túnel ni adornos por encima)
+    id: 'estacion', name: 'Estación Estelar', cup: 3, R: 328, width: 15.5, gravity: 0.45,
+    waves: [[3, 0.137, 0.55], [4, 0.057, 5.44], [7, 0.039, 4.78]], seed: 139,
     theme: {
       skyTop: 0x02030d, skyBottom: 0x241a5e, fog: 0x100c30, fogNear: 140, fogFar: 560,
       ground: 0x8a90b8, ground2: 0x6a7098, liquid: 0x4a2aa8, liquidLevel: -10, liquidGlow: 1,
@@ -256,8 +257,8 @@ export const TRACKS = [
       fx: 'stars', fxColor: 0x9fb8ff, hills: 9, mountains: 0x3a3e66, clouds: 0x2a2060, space: true, propGlow: 0x7ff0ff,
     },
     music: { tempo: 120, root: 59, scale: 'minor', prog: [0, 5, 3, 4], seed: 103, style: 'space' },
-    hills: [[0, 0], [0.03, 1], [0.25, 6], [0.29, 5], [0.37, 4], [0.415, 5], [0.66, 3], [0.74, 5], [0.82, 2], [0.9, 2.5], [0.96, 0.6], [1, 0]],
-    glide: [[0.095, 0.21, 11, 7], [0.47, 0.59, 13, 6]], tunnel: [0.29, 0.37], ramps: [0.25, 0.415, 0.9],
+    hills: [[0, 0], [0.03, 1], [0.22, 6.5], [0.35, 5], [0.41, 4], [0.425, 4.6], [0.66, 3], [0.74, 5], [0.82, 2], [0.9, 2.5], [0.96, 0.6], [1, 0]],
+    glide: [[0.095, 0.21, 11, 7], [0.47, 0.59, 13, 6]], tunnel: [0.35, 0.41], ramps: [0.22, 0.425, 0.9],
     extras: { weather: 'stars', hazard: 'asteroid', life: null, liquidMode: 5, lamp: 0x7ff0ff, deck: 0x8a90b8, tunnelCol: 0x9ab8ff, tunnelGlow: 0x7ff0ff, tunnelGlass: true, puddle: null, mark: 0x10142a, ambience: 'space' },
   },
 ];
@@ -312,7 +313,7 @@ export const EXTRA_TRACKS = [
       fx: 'embers', fxColor: 0xffa23a, hills: 15, mountains: 0x3a1424, clouds: 0x5a2434, propGlow: 0xff5a1a,
     },
     music: { tempo: 150, root: 50, scale: 'minor', prog: [0, 5, 3, 4], seed: 123, style: 'volcano' },
-    hills: [[0, 0], [0.3, 3], [0.55, 0.5], [0.8, 3], [1, 0]], ramps: [0.3, 0.8], noShortcut: true,
+    hills: [[0, 0], [0.38, 3], [0.63, 0.5], [0.88, 3], [1, 0]], ramps: [0.38, 0.88], noShortcut: true,
     extras: { weather: 'none', hazard: null, life: null, liquidMode: 1, lamp: 0xff6a1a, deck: 0x4a3a44, tunnelCol: 0x3a2630, tunnelGlow: 0xff7a1a, puddle: null, mark: 0x0c0a0e, ambience: 'volcano' },
   },
 ];

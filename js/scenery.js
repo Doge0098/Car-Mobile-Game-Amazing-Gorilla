@@ -19,6 +19,9 @@ export function buildScenery(ctx) {
   const updaters = [];
   const S = i => samples[((i % N) + N) % N];
   const free = i => !special(S(i)) && !nearRamp(((i % N) + N) % N);
+  // con poca gravedad los saltos son largos y altos: nada colgado sobre la pista en las 75 muestras siguientes a una rampa
+  const lowG = (ctx.def.gravity || 1) < 0.8, rampI = (ctx.def.ramps || []).map(fIdx);
+  const freeAir = i => free(i) && !(lowG && rampI.some(r => (((i - r) % N) + N) % N < 75));
   const o = new THREE.Object3D(), col = new THREE.Color(), col2 = new THREE.Color();
   const lambert = (extra = {}) => own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, ...extra }));
   const addMesh = (g, m, cast = true) => { const mesh = new THREE.Mesh(g, m); mesh.castShadow = shadows && cast; group.add(mesh); return mesh; };
@@ -168,7 +171,7 @@ export function buildScenery(ctx) {
     }
     const g = own(merged(parts)), m = lambert();
     for (const i of [N - 32, fIdx(0.05), fIdx(0.28), fIdx(0.58)]) {
-      if (!free(i)) continue;
+      if (!freeAir(i)) continue;
       const s = S(i), mesh = addMesh(g, m, false); mesh.position.set(s.x, s.y, s.z); mesh.rotation.y = s.h;
     }
     const ap = [], R = hw + 2.9;
@@ -178,7 +181,7 @@ export function buildScenery(ctx) {
     }
     const ag = own(merged(ap)), am = own(new THREE.MeshLambertMaterial({ vertexColors: true }));
     for (const f of [0.22, 0.5, 0.76]) {
-      const i = fIdx(f); if (!free(i)) continue;
+      const i = fIdx(f); if (!freeAir(i)) continue;
       const s = S(i), mesh = addMesh(ag, am); mesh.position.set(s.x, s.y, s.z); mesh.rotation.y = s.h;
     }
   }
@@ -380,6 +383,39 @@ export function buildScenery(ctx) {
     const glowM = c => own(new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(B(2)) }));
     const Bx = (x, y, z) => new THREE.BoxGeometry(x, y, z), Cy = (a, b, h, n = 10) => new THREE.CylinderGeometry(a, b, h, n), Co = (r, h, n = 10) => new THREE.ConeGeometry(r, h, n), Ic = (r, d = 1) => new THREE.IcosahedronGeometry(r, d);
     const id = ctx.def.id;
+    // Edificios que cubren el túnel (pirámide, nave de la fábrica): sus paredes llevan el hueco exacto por donde pasa el tubo.
+    // tubeCut: puntos donde la pared del túnel (radio entre su cara interior y la exterior) atraviesa un plano, entrando desde una boca.
+    const tubeCut = (P0, Nn, atEnd) => {
+      const out = [], J = 16, R = hw + 5.1, dir = atEnd ? -1 : 1, k0 = atEnd ? tunR[1] + 3 : tunR[0] - 3;
+      for (let j = 0; j <= J; j++) {
+        const a = Math.PI * j / J, ca = Math.cos(a), sa = Math.sin(a);
+        const pt = k => { const q = S(k); return [q.x + q.nx * ca * R, q.y - 0.5 + sa * R * 0.95, q.z + q.nz * ca * R]; };
+        const dist = q => (q[0] - P0.x) * Nn.x + (q[1] - P0.y) * Nn.y + (q[2] - P0.z) * Nn.z;
+        let a0 = pt(k0), d0 = dist(a0), hit = null;
+        for (let n = 1; n <= 26 && !hit; n++) { const a1 = pt(k0 + dir * n), d1 = dist(a1); if (d0 * d1 <= 0 && d0 !== d1) { const t = d0 / (d0 - d1); hit = [a0[0] + (a1[0] - a0[0]) * t, a0[1] + (a1[1] - a0[1]) * t, a0[2] + (a1[2] - a0[2]) * t]; } a0 = a1; d0 = d1; }
+        if (!hit) return null;
+        out.push(hit);
+      }
+      return out;
+    };
+    // orienta los triángulos de una cara plana hacia `out` (el contorno cómic pinta de oscuro las caras vueltas)
+    const faceOut = (g0, out) => {
+      const g = g0.index ? g0.toNonIndexed() : g0, P = g.attributes.position, a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+      for (let i = 0; i < P.count; i += 3) {
+        a.fromBufferAttribute(P, i); b.fromBufferAttribute(P, i + 1); c.fromBufferAttribute(P, i + 2);
+        if (b.clone().sub(a).cross(c.clone().sub(a)).dot(out) < 0) { P.setXYZ(i + 1, c.x, c.y, c.z); P.setXYZ(i + 2, b.x, b.y, b.z); }
+      }
+      return g;
+    };
+    // cara plana (origen P0, ejes U y V, contorno en 2D) con ese hueco recortado
+    const holedFace = (P0, U, V, outline, hole) => {
+      const shape = new THREE.Shape(outline.map(q => new THREE.Vector2(q[0], q[1]))), uMax = Math.max(...outline.map(q => Math.abs(q[0]))) - 0.5;
+      if (hole) shape.holes.push(new THREE.Path(hole.map(q => { const dx = q[0] - P0.x, dy = q[1] - P0.y, dz = q[2] - P0.z; return new THREE.Vector2(Math.max(-uMax, Math.min(uMax, dx * U.x + dy * U.y + dz * U.z)), Math.max(0.05, dx * V.x + dy * V.y + dz * V.z)); })));
+      const g = new THREE.ShapeGeometry(shape), P = g.attributes.position;
+      for (let i = 0; i < P.count; i++) { const u = P.getX(i), v = P.getY(i); P.setXYZ(i, P0.x + U.x * u + V.x * v, P0.y + U.y * u + V.y * v, P0.z + U.z * u + V.z * v); }
+      return g;
+    };
+    const tri = (a, b, c) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z], 3)); return g; };
     if (id === 'selva') {
       // pirámide con cabeza de gorila y cascada
       const p = [], st = [0x9a9a7a, 0x8a8a6a];
@@ -535,10 +571,18 @@ export function buildScenery(ctx) {
       put(own(merged(pyramid(52, 62).concat(pyramid(34, 40, -76, 24), pyramid(24, 28, 64, 40)))), lambert(), g1, false);
       const caps = [[capG(52, 62), g1]];
       if (tunR) {
-        // el túnel atraviesa una pirámide: las bocas asoman por dos de sus caras
-        const a = S(tunR[0]), b = S(tunR[1]), m = S((tunR[0] + tunR[1]) >> 1), r = (Math.hypot(b.x - a.x, b.z - a.z) / 2 - 16) * 1.414;
-        const tp = { x: (a.x + b.x + 2 * m.x) / 4, z: (a.z + b.z + 2 * m.z) / 4, y: Math.min(a.y, b.y) - 4, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
-        put(own(merged(pyramid(r, r * 0.9))), lambert(), tp, false); caps.push([capG(r, r * 0.9), tp]);
+        // el túnel atraviesa una pirámide: las bocas asoman por dos de sus caras, que llevan recortado el hueco del tubo
+        const a = S(tunR[0]), b = S(tunR[1]), m = S((tunR[0] + tunR[1]) >> 1), half = Math.hypot(b.x - a.x, b.z - a.z) / 2 - 16, r = half * 1.414, h = r * 0.9, yaw = Math.atan2(b.x - a.x, b.z - a.z);
+        const c = new THREE.Vector3((a.x + b.x + 2 * m.x) / 4, Math.min(a.y, b.y) - 4, (a.z + b.z + 2 * m.z) / 4), top = c.clone().setY(c.y + h), slant = Math.hypot(h, half);
+        const ez = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), ex = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), p = [[Bx(r * 1.5, 3, r * 1.5), 0xc89648, [c.x, c.y + 0.6, c.z], null, [0, yaw, 0]]];
+        for (const [dir, U, atEnd] of [[ez.clone().negate(), ex, false], [ez, ex.clone().negate(), true]]) {
+          const P0 = c.clone().addScaledVector(dir, half), V = top.clone().sub(P0).normalize();
+          p.push([faceOut(holedFace(P0, U, V, [[-half, 0], [half, 0], [0, slant]], tubeCut(P0, new THREE.Vector3().crossVectors(U, V), atEnd)), dir), 0xe8b860]);
+        }
+        for (const sx of [1, -1]) { const e = c.clone().addScaledVector(ex, half * sx); p.push([faceOut(tri(e.clone().addScaledVector(ez, half), e.clone().addScaledVector(ez, -half), top), ex.clone().multiplyScalar(sx)), 0xe0b058]); }
+        for (const f of [0.32, 0.56, 0.78]) p.push([Cy(r * (1 - f - 0.035) + 0.3, r * (1 - f) + 0.3, h * 0.035, 4), 0xc8823a, [c.x, c.y + h * (f + 0.0175), c.z], null, [0, yaw + Q, 0]]);
+        const pm = addMesh(own(merged(p)), lambert(), false); if (outline) addOutline(pm);
+        caps.push([capG(r, h), { x: c.x, y: c.y, z: c.z, yaw }]);
       }
       for (const [g, sp] of caps) { const c = new THREE.Mesh(g, glowM(0xffd21f)); c.position.set(sp.x, sp.y, sp.z); c.rotation.y = sp.yaw; group.add(c); }
       const inst = (g, m, list, cast) => { // [x, y, z, escala, giro]
@@ -569,15 +613,28 @@ export function buildScenery(ctx) {
       for (let k = 0; k < 11; k++) { const a = Math.PI * (k + 0.5) / 11; ap.push([new THREE.DodecahedronGeometry(3.2 + rand() * 1.4, 0), [0xc8703a, 0xe08a4a, 0xd07a42][k % 3], [Math.cos(a) * R2, Math.sin(a) * R2 * 0.85 - 1, (rand() - 0.5) * 2]]); }
       const arch = own(merged(ap));
       for (const u of [0.062, 0.185, 0.375]) { const i = fIdx(u); if (!free(i)) continue; const s = S(i), m = addMesh(arch, rockM); m.position.set(s.x, s.y, s.z); m.rotation.y = s.h; if (outline) addOutline(m); }
-      const ob = own(merged([[Cy(0.8, 1.2, 12, 4), 0xe8b860, [0, 6, 0], null, [0, Q, 0]], [Co(1.15, 2.2, 4), 0xffd21f, [0, 13.1, 0], null, [0, Q, 0]], [Bx(3, 1.2, 3), 0xc89648, [0, 0.6, 0]]]));
-      for (const [i, side] of [[26, 1], [26, -1], [N - 50, 1], [N - 50, -1]]) { const s = S(i), lat = (hw + 9) * side, m = addMesh(ob, rockM); m.position.set(s.x + s.nx * lat, s.y, s.z + s.nz * lat); m.rotation.y = s.h; if (outline) addOutline(m); }
+      const ob = []; // los cuatro obeliscos van en una sola malla
+      for (const [i, side] of [[26, 1], [26, -1], [N - 50, 1], [N - 50, -1]]) {
+        const s = S(i), lat = (hw + 9) * side, x = s.x + s.nx * lat, z = s.z + s.nz * lat;
+        ob.push([Cy(0.8, 1.2, 12, 4), 0xe8b860, [x, s.y + 6, z], null, [0, s.h + Q, 0]], [Co(1.15, 2.2, 4), 0xffd21f, [x, s.y + 13.1, z], null, [0, s.h + Q, 0]], [Bx(3, 1.2, 3), 0xc89648, [x, s.y + 0.6, z], null, [0, s.h, 0]]);
+      }
+      const obm = addMesh(own(merged(ob)), rockM); obm.frustumCulled = false; if (outline) addOutline(obm).frustumCulled = false;
     } else if (id === 'fabrica') {
       // nave de la fábrica sobre el túnel (chimeneas con humo de colores y engranajes), tren de juguete, grúa, robot de cuerda y puertas de bloques
       const cols = [0xff3b4a, 0xffd21f, 0x2b9dff, 0x35e08a, 0xff7a1a, 0x7a5cff], spin = []; // spin: [malla, velocidad de giro]
       if (tunR) {
-        const a = S(tunR[0]), b = S(tunR[1]), m = S((tunR[0] + tunR[1]) >> 1), L2 = Math.hypot(b.x - a.x, b.z - a.z) / 2 - 13, W2 = 34, H = 26;
-        const hall = new THREE.Group(); hall.position.set((a.x + b.x + 2 * m.x) / 4, Math.min(a.y, b.y) - 4, (a.z + b.z + 2 * m.z) / 4); hall.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
-        const p = [[Bx(W2 * 2, H, L2 * 2), 0xfff3d0, [0, H / 2, 0]], [Bx(W2 * 2 + 0.8, 3, L2 * 2 + 0.8), 0xff3b4a, [0, H * 0.34, 0]], [Bx(W2 * 2 + 0.8, 3, L2 * 2 + 0.8), 0x2b9dff, [0, H * 0.66, 0]]];
+        // las dos fachadas que cruza el túnel llevan recortado el hueco del tubo; el ancho se adapta a la curva del túnel
+        const a = S(tunR[0]), b = S(tunR[1]), m = S((tunR[0] + tunR[1]) >> 1), L2 = Math.hypot(b.x - a.x, b.z - a.z) / 2 - 13, H = 30, yaw = Math.atan2(b.x - a.x, b.z - a.z);
+        const c = new THREE.Vector3((a.x + b.x + 2 * m.x) / 4, Math.min(a.y, b.y) - 4, (a.z + b.z + 2 * m.z) / 4), ez = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), ex = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), up = new THREE.Vector3(0, 1, 0);
+        let W2 = 30; for (let k = tunR[0]; k <= tunR[1]; k++) { const q = S(k); W2 = Math.max(W2, Math.abs((q.x - c.x) * ex.x + (q.z - c.z) * ex.z) + 19); }
+        const hall = new THREE.Group(); hall.position.copy(c); hall.rotation.y = yaw; hall.updateMatrixWorld();
+        const inv = hall.matrixWorld.clone().invert();
+        const p = [[Bx(0.6, H, L2 * 2), 0xfff3d0, [-W2, H / 2, 0]], [Bx(0.6, H, L2 * 2), 0xfff3d0, [W2, H / 2, 0]], [Bx(W2 * 2, 0.6, L2 * 2), 0xfff3d0, [0, H, 0]],
+          [Bx(W2 * 2 + 1.4, 3, L2 * 2 + 0.8), 0xff3b4a, [0, H * 0.62, 0]], [Bx(W2 * 2 + 1.4, 3, L2 * 2 + 0.8), 0x2b9dff, [0, H * 0.86, 0]]];
+        for (const [dir, U, atEnd] of [[ez.clone().negate(), ex, false], [ez, ex.clone().negate(), true]]) {
+          const P0 = c.clone().addScaledVector(dir, L2);
+          p.push([faceOut(holedFace(P0, U, up, [[-W2, 0], [W2, 0], [W2, H], [-W2, H]], tubeCut(P0, dir, atEnd)), dir).applyMatrix4(inv), 0xfff3d0]);
+        }
         const nT = 4, tr = L2 / nT * 1.12, chim = [[-W2 + 7, -L2 + 8], [W2 - 7, L2 - 8]];
         for (let k = 0; k < nT; k++) p.push([Cy(tr, tr, W2 * 2, 3), cols[k], [0, H + tr * 0.2, -L2 + (k + 0.5) * 2 * L2 / nT], null, [0, 0, Math.PI / 2]]); // tejado en dientes de sierra
         for (const [x, z] of chim) p.push([Cy(3, 3.6, 22, 10), 0xffffff, [x, H + 11, z]], [Cy(3.3, 3.45, 3, 10), 0xff3b4a, [x, H + 14, z]], [Cy(3.1, 3.2, 3, 10), 0xff3b4a, [x, H + 19.5, z]]);
@@ -586,7 +643,7 @@ export function buildScenery(ctx) {
         for (let i = 0; i < 10; i++) { const an = i / 10 * 6.283; gp.push([Bx(2.2, 2.2, 1.6), 0xffffff, [Math.cos(an) * 6.6, Math.sin(an) * 6.6, 0], null, [0, 0, an]]); }
         const gearG = own(merged(gp));
         [[-19, 1, 1], [19, 1, -1], [-19, -1, -1], [19, -1, 1]].forEach(([x, f, dir], n) => {
-          const g = new THREE.Mesh(gearG, own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: cols[n + 1] }))); g.position.set(x, H * 0.76, f * (L2 + 1)); hall.add(g); spin.push([g, dir * 0.5]);
+          const g = new THREE.Mesh(gearG, own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, color: cols[n + 1] }))); g.position.set(x * (W2 - 13) / 19, H * 0.78, f * (L2 + 1)); hall.add(g); spin.push([g, dir * 0.5]);
         });
         group.add(hall); hall.updateMatrixWorld();
         const ch = chim.map(([x, z]) => hall.localToWorld(new THREE.Vector3(x, H + 23, z)));
@@ -703,14 +760,14 @@ export function buildScenery(ctx) {
       put(own(merged(rk)), lambert(), kp);
       const port = new THREE.Mesh(own(merged([[Cy(1.2, 1.2, 0.4, 12), 0xffffff, [0, 20, 3.5], null, [Math.PI / 2, 0, 0]], [Cy(0.9, 0.9, 0.4, 12), 0xffffff, [0, 15.5, 3.5], null, [Math.PI / 2, 0, 0]]])), glowM(0x7ff0ff));
       port.position.set(kp.x, kp.y, kp.z); port.rotation.y = kp.yaw; group.add(port);
-      // aros de la estación sobre la pista
-      const gR = hw + 5.5, gt = [[Bx(3.4, 2.4, 4.4), 0x5a6088, [-gR, 1.2, 0]], [Bx(3.4, 2.4, 4.4), 0x5a6088, [gR, 1.2, 0]]], gl = [], arc = Math.PI + 0.5;
+      // aros de la estación sobre la pista (altos: con poca gravedad los coches saltan hasta unos 12 m)
+      const gR = hw + 8, gt = [[Bx(3.4, 2.4, 4.4), 0x5a6088, [-gR, 1.2, 0]], [Bx(3.4, 2.4, 4.4), 0x5a6088, [gR, 1.2, 0]]], gl = [], arc = Math.PI + 0.5;
       for (let k = 0; k < 16; k++) {
         const a = -0.25 + arc * (k + 0.5) / 16; gt.push([Cy(1, 1, arc * gR / 16 * 1.08, 8), k % 2 ? 0xff7a1a : 0xe8ecf8, [Math.cos(a) * gR, Math.sin(a) * gR + 1.5, 0], null, [0, 0, a]]);
         if (k % 2 === 0) gl.push([Ic(0.5, 0), 0xffffff, [Math.cos(a) * (gR - 1.25), Math.sin(a) * (gR - 1.25) + 1.5, 0]]);
       }
       const gate = own(merged(gt)), gateL = own(merged(gl)), gateM = lambert(), gateLM = glowM(0x7ff0ff);
-      for (const u of [0.06, 0.383, 0.955]) {
+      for (const u of [0.06, 0.29, 0.955]) {
         const i = fIdx(u); if (!free(i)) continue;
         const s = S(i), m = addMesh(gate, gateM), l = new THREE.Mesh(gateL, gateLM); m.position.set(s.x, s.y, s.z); m.rotation.y = s.h; m.add(l); if (outline) addOutline(m);
       }
