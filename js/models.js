@@ -563,8 +563,8 @@ const DECAL_SLOTS = [1, -1].map(sd => ({
   ok: (P, K) => P.x * sd > 0.3 && !(Math.abs(P.x) < 0.8 && P.y > K.seat + 0.15) && K.wheels.every(([, r, wz]) => (wz > 0 ? wz - P.z : P.z - wz) > r + 0.25),
   pref: P => 0.06 * Math.abs(P.z - 0.05) - 0.25 * Math.abs(P.x) - 0.1 * P.y,
 })).concat({
-  // capó: por delante del volante, en el eje del coche
-  dir: [0, -0.94, -0.34], up: [0, 0, 1], aims: steps(0.6, 2.6, 0.1).map(z => [0, 0.8, z]),
+  // capó: por delante del volante, en el eje del coche; el dibujo se lee de pie mirando el coche de frente
+  dir: [0, -0.94, -0.34], up: [0, 0, -1], aims: steps(0.6, 2.6, 0.1).map(z => [0, 0.8, z]),
   zone: (x, y, z) => Math.abs(x) < 0.8 && z > 0.3,
   ok: P => P.z > 0.85 && Math.abs(P.x) < 0.2, pref: P => 0.05 * Math.abs(P.z - 1.6),
 });
