@@ -54,16 +54,16 @@ export class Podium {
     this.gorillas = []; this.trophy = null;
   }
 
-  // top: [{ char, kart, color }] (hasta 3)
+  // top: [{ char, kart, color, hat, wheels }] (hasta 3; hat y wheels solo los lleva el jugador)
   setup(top) {
     this.group.clear(); this.gorillas = []; this.t = 0; this.fx.clear();
     top.slice(0, 3).forEach((r, i) => {
-      const s = SLOTS[i], g = makeGorilla(r.char, null, true);
+      const s = SLOTS[i], g = makeGorilla(r.char, null, true, r.hat);
       g.position.set(s.x, s.h, 0.2); g.scale.setScalar(1.15);
       const sh = blobShadow(2.2); sh.position.set(s.x, s.h + 0.03, 0.2);
       this.group.add(g, sh); this.gorillas.push({ g, mode: s.mode });
       if (r.kart) {
-        const k = makeKart(r.kart, r.color != null ? KART_COLORS[r.color] || null : null);
+        const k = makeKart(r.kart, r.color != null ? KART_COLORS[r.color] || null : null, null, r.wheels);
         k.position.set(s.x * 1.9, 0, -5.2 - (i === 0 ? 1.2 : 0)); k.rotation.y = i === 0 ? 0 : (i === 1 ? 0.5 : -0.5);
         this.group.add(k);
       }

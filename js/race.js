@@ -11,6 +11,10 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const wrapA = a => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 const DRIFT_COLORS = [0xffffff, 0x38b6ff, 0xff9a1a, 0xe04dff];
 const TRICK_T = 0.55, THROW_T = 0.4;
+// estela por defecto: { color de la cinta, sparks: chispas del escape, rainbow: recorre el arcoíris }
+const FIRE_TRAIL = { color: 0xffa030, sparks: [0xff7a1a, 0xffe45a] };
+const _hue = new THREE.Color();
+const hueHex = h => _hue.setHSL(h - Math.floor(h), 1, 0.56).getHex();
 
 class Racer {
   constructor(race, slot, char, kart, color, isPlayer) {
@@ -19,6 +23,12 @@ class Racer {
     const ac = isPlayer ? char.stats.accel + kart.stats.accel : 7;
     const hd = isPlayer ? char.stats.handling + kart.stats.handling : 7;
     this.maxSpeed = 50 + sp * 1.7; this.accel = 20 + ac * 2.2; this.turnRate = 1.75 + hd * 0.07; this.grip = 6 + hd * 0.4;
+    this.boostK = 1; // multiplicador de la duración de los impulsos
+    // solo el jugador: mejoras del garaje y personalización
+    const tune = isPlayer && race.playerTune;
+    if (tune) for (const k of ['maxSpeed', 'accel', 'turnRate', 'grip', 'boostK']) this[k] += tune[k] || 0;
+    this.hat = (isPlayer && race.playerHat) || null; this.wheels = (isPlayer && race.playerWheel) || null;
+    this.trailDef = (isPlayer && race.playerTrail) || FIRE_TRAIL;
 
     const tr = race.track, g = tr.grid(slot);
     this.x = g.x; this.z = g.z; this.h = g.h; this.idx = g.idx; this.y = tr.yAt(g.x, g.z, g.idx);
@@ -34,6 +44,9 @@ class Racer {
     this.wrongT = 0; this.t = Math.random() * 10; this.bumpCd = 0; this.sizeK = 1;
     this.throwT = 0; this.tauntT = 0; this.angryT = 0; this.lookT = 0; this.lookDir = 0; this.lookCd = 2 + Math.random() * 4; this.lookNow = 0;
     this.mk = [{ on: false, x: 0, y: 0, z: 0 }, { on: false, x: 0, y: 0, z: 0 }];
+    // estadísticas de la carrera (misiones, logros, tutorial)
+    this.st = { tricks: 0, rings: 0, miniturbos: 0, items: 0, hitsDealt: 0, hitsTaken: 0, bananas: 0, startBoost: false, pads: 0,
+      offT: 0, offMax: 0, offCur: 0, bestPos: slot + 1, overtakes: 0, topSpeed: 0 };
     // IA
     this.lane = (Math.random() - 0.5) * tr.hw * 1.1; this.ph = Math.random() * 6.28;
     this.skill = (Math.random() - 0.5) * 0.05;
@@ -41,8 +54,8 @@ class Racer {
     this.root = new THREE.Group();
     this.pitchG = new THREE.Group(); this.root.add(this.pitchG);
     this.tilt = new THREE.Group(); this.pitchG.add(this.tilt);
-    this.kart = makeKart(kart, color); this.tilt.add(this.kart);
-    this.gorilla = mountGorilla(this.kart, makeGorilla(char));
+    this.kart = makeKart(kart, color, null, this.wheels); this.tilt.add(this.kart);
+    this.gorilla = mountGorilla(this.kart, makeGorilla(char, null, false, this.hat));
     this.tilt.add(this.gorilla);
     this.rigs = makeModeRigs(); this.tilt.add(this.rigs.glider, this.rigs.boat, this.rigs.sub);
     this.outlines = []; this.olOn = true; this.tilt.traverse(o => { if (o.userData.isOutline) this.outlines.push(o); });
@@ -56,9 +69,10 @@ class Racer {
     this.trail = new Trail(); race.scene.add(this.trail.mesh); this.trail.reset(this.x, this.y, this.z);
   }
 
-  boost(t) { this.boostT = Math.max(this.boostT, t); }
+  boost(t) { this.boostT = Math.max(this.boostT, t * this.boostK); }
 
-  hit() {
+  // by: corredor que provoca el golpe (para contar los golpes dados); sin él es un obstáculo del mapa
+  hit(by) {
     if (this.furyT > 0 || this.spinT > 0) return false;
     const race = this.race, fx = race.fx;
     if (this.shieldT > 0) {
@@ -69,6 +83,7 @@ class Racer {
     }
     this.spinT = 1.25; this.drifting = false; this.charge = 0; this.hopV = Math.max(this.hopV, 7.5); this.boostT = 0; this.air = false;
     this.bananas = Math.max(0, this.bananas - 3);
+    this.st.hitsTaken++; if (by && by !== this) by.st.hitsDealt++;
     fx.add.burst(this.x, this.y + 1.5, this.z, 26, [0xffe21f, 0xffffff, 0xff5a3c], 11, 8, 0.7, 12);
     if (this.isPlayer) { sfx.hit(); race.shake = 0.5; A.haptic?.('hit'); } else if (this.near()) sfx.bump();
     if (this.isPlayer || this.near()) race.shock(this.x, this.y + 1.2, this.z, 0xff5a3c, 6);
@@ -119,7 +134,7 @@ class Racer {
       if (!ctl.drift || this.speed < 16 || spinning) {
         const lvl = this.driftLevel();
         if (lvl > 0 && !spinning && this.speed >= 16) {
-          this.boost([0, 0.7, 1.25, 1.9][lvl]);
+          this.boost([0, 0.7, 1.25, 1.9][lvl]); this.st.miniturbos++;
           if (this.isPlayer) { sfx.miniturbo(); A.haptic?.('boost'); }
           fx.add.burst(this.x, this.y + 0.6, this.z, 16, DRIFT_COLORS[lvl], 8, 7, 0.4);
         }
@@ -158,7 +173,7 @@ class Racer {
           fx.norm.burst(this.x, this.y + 0.3, this.z, 10, race.dustColor, 6, 12, 0.5, 3);
           if (this.isPlayer) { sfx.land?.(); A.haptic?.('land'); }
           if (this.trickDone && !spinning) {
-            this.boost(1.15);
+            this.boost(1.15); this.st.tricks++;
             fx.add.burst(this.x, this.y + 0.8, this.z, 20, [0x22e6ff, 0xffe45a, 0xffffff], 10, 8, 0.5);
             if (this.isPlayer) { sfx.trick?.(); race.emit('trick'); }
           }
@@ -181,6 +196,12 @@ class Racer {
     }
     this.lat = lat; this.off = Math.abs(lat) > tr.hw + 1.6 && !s.zone;
     this.y = tr.yAt(this.x, this.z, ni);
+    if (race.state === 'racing' && !this.finished) {
+      const st = this.st;
+      if (!this.off) st.offCur = 0;
+      else if (!air) { st.offT += dt; st.offCur += dt; if (st.offCur > st.offMax) st.offMax = st.offCur; }
+      if (this.speed > st.topSpeed) st.topSpeed = this.speed;
+    }
     // transformación automática según el tramo
     if (s.zone !== this.mode) race.setMode(this, s.zone);
     if (s.zone === 'glide') {
@@ -192,7 +213,7 @@ class Racer {
       if (rg.cd[this.slot] > 0) { rg.cd[this.slot] -= dt; continue; }
       let di = ni - rg.idx; if (di < -N / 2) di += N;
       if (di >= 0 && di <= 1 && Math.abs(lat - rg.lat) < 3.4) {
-        rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++;
+        rg.cd[this.slot] = 4; this.boost(0.9); this.bananas++; this.st.rings++; this.st.bananas++;
         fx.add.burst(rg.x, rg.y, rg.z, 22, [0xffd21f, 0xffffff, 0x22e6ff], 12, 9, 0.5);
         race.shock(rg.x, rg.y, rg.z, 0xffffff, 9, 0.4);
         if (this.isPlayer) { sfx.trick?.(); A.haptic?.('boost'); race.emit('ring'); }
@@ -221,7 +242,7 @@ class Racer {
       this.rolling -= dt;
       if (this.rolling <= 0) { this.item = race.rollItem(this); this.itemCount = 1; this.useDelay = 1 + Math.random() * 3.5; if (this.isPlayer) sfx.item(); }
     }
-    if (!this.finished && this.prog >= LAPS * N && (race.state === 'racing' || race.state === 'finished')) race.finishRacer(this);
+    if (!this.finished && this.prog >= race.laps * N && (race.state === 'racing' || race.state === 'finished')) race.finishRacer(this);
   }
 
   driftLevel() { return this.charge > 2.6 ? 3 : this.charge > 1.6 ? 2 : this.charge > 0.75 ? 1 : 0; }
@@ -231,7 +252,7 @@ class Racer {
     if (ground) for (const p of tr.pads) {
       const dx = this.x - p.x, dz = this.z - p.z;
       if (dx * dx + dz * dz < 14 && this.boostT < 0.6) {
-        this.boost(1.15);
+        this.boost(1.15); this.st.pads++;
         if (this.isPlayer) { sfx.boost(); A.haptic?.('boost'); }
       }
     }
@@ -241,7 +262,7 @@ class Racer {
       if ((di > 7 || di < -7) && this.magnetT <= 0) continue;
       const dx = this.x - b.px, dz = this.z - b.pz;
       if (dx * dx + dz * dz < 5.3 * this.sizeK) {
-        b.active = false; b.timer = 14; this.bananas++;
+        b.active = false; b.timer = 14; this.bananas++; this.st.bananas++;
         if (this.isPlayer) { sfx.coin(); fx.add.burst(b.px, this.y + 1.2, b.pz, 8, 0xffe21f, 5, 5, 0.35); }
       }
     }
@@ -251,7 +272,7 @@ class Racer {
       if (dx * dx + dz * dz < 6.5 && this.hopY < 2.4) {
         b.active = false; b.timer = 3.5; b.mesh.visible = false;
         fx.add.burst(b.x, b.y + 1.5, b.z, 22, [0xff4fd8, 0xffd21f, 0x22e6ff, 0xffffff], 10, 8, 0.5, 8);
-        if (!this.item && this.rolling <= 0 && !this.finished) { this.rolling = 1.3; }
+        if (!this.item && this.rolling <= 0 && !this.finished && (this.isPlayer || race.aiItems !== false)) { this.rolling = 1.3; }
         if (this.isPlayer || this.near()) race.shock(b.x, b.y + 1.5, b.z, 0xffe45a, 4.5);
         if (this.isPlayer) sfx.tick();
       }
@@ -325,8 +346,8 @@ class Racer {
 
     // estela luminosa
     const f = [Math.sin(this.h), Math.cos(this.h)], l = [Math.cos(this.h), -Math.sin(this.h)];
-    const glow = this.boostT > 0 || this.furyT > 0;
-    this.trail.push(this.x - f[0] * 1.9, y + this.hopY + 0.75, this.z - f[1] * 1.9, l[0], l[1], this.furyT > 0 ? 0xc04dff : 0xffa030, glow, race.glowK * 0.7);
+    const glow = this.boostT > 0 || this.furyT > 0, td = this.trailDef;
+    this.trail.push(this.x - f[0] * 1.9, y + this.hopY + 0.75, this.z - f[1] * 1.9, l[0], l[1], this.furyT > 0 ? 0xc04dff : td.rainbow ? hueHex(t * 0.8) : td.color, glow, race.glowK * 0.7);
 
     // lo demás solo si está cerca de la cámara
     const cam = race.camPos, dd = (cam.x - this.x) ** 2 + (cam.z - this.z) ** 2;
@@ -363,7 +384,7 @@ class Racer {
       for (const sd of [-0.4, 0.4]) {
         const [px, pz] = rear(sd, 2.3);
         fx.add.emit(px, y + 1.0 + this.hopY, pz, -f[0] * 14 + (Math.random() - 0.5) * 3, (Math.random() - 0.3) * 3, -f[1] * 14 + (Math.random() - 0.5) * 3,
-          Math.random() < 0.5 ? 0xff7a1a : 0xffe45a, 12, 0.3, 0, -0.5);
+          td.rainbow ? hueHex(Math.random()) : td.sparks[Math.random() < 0.5 ? 0 : 1], 12, 0.3, 0, -0.5);
       }
     }
     if (this.off && this.speed > 12 && ground && Math.random() < 0.7) {
@@ -384,7 +405,11 @@ class Racer {
 
 export class Race {
   constructor(opts) {
-    Object.assign(this, opts); // scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent...
+    // opts: scene, track, fx:{add,norm}, mode, difficulty, quality, bloom, shadows, onEvent, playerChar/Kart/Color...
+    //  opcionales: laps · rivals [{ char, kart, color }] · playerTune { maxSpeed, accel, turnRate, grip, boostK } (se suman al jugador)
+    //  playerHat · playerWheel · playerTrail { color, sparks, rainbow } · playerHorn · aiItems: false (los rivales no cogen objetos) · noHazards
+    Object.assign(this, opts);
+    this.laps = this.laps > 0 ? Math.round(this.laps) : LAPS;
     const tr = this.track, def = tr.def, ex = def.extras;
     this.state = 'intro'; this.stateT = 0; this.time = 0; this.t = 0; this.shake = 0;
     this.finishOrder = []; this.peels = []; this.cocos = []; this.waves = []; this.barrels = []; this.bolts = []; this.shocks = [];
@@ -403,24 +428,25 @@ export class Race {
     this.marks = new SkidMarks(this.quality < 0.7 ? 300 : 700); this.scene.add(this.marks.mesh);
 
     const pc = charById(this.playerChar), pk = kartById(this.playerKart);
-    this.racers = [];
+    this.racers = []; this.hornCd = 0;
     const solo = this.mode === 'time';
-    const total = solo ? 1 : RACERS;
+    // rivales: opts.rivals = [{ char, kart, color }] (ids e índice de color); si no se dan, los de siempre
     const others = CHARACTERS.filter(c => c.id !== pc.id);
+    const lineup = solo ? [] : this.rivals || others.slice(0, RACERS - 1).map((c, i) => ({ char: c.id, kart: KARTS[(i * 2 + 1) % KARTS.length].id, color: 1 + (i * 3) % (KART_COLORS.length - 1) }));
+    const total = lineup.length + 1;
     for (let i = 0; i < total; i++) {
       const isP = i === total - 1;
       const slot = solo ? 0 : i;
       if (isP) { this.racers.push(new Racer(this, slot, pc, pk, KART_COLORS[this.playerColor] || null, true)); this.racers[i].colorIdx = this.playerColor; }
       else {
-        const ch = others[i % others.length], kd = KARTS[(i * 2 + 1) % KARTS.length];
-        const ci = 1 + (i * 3) % (KART_COLORS.length - 1);
-        this.racers.push(new Racer(this, slot, ch, kd, KART_COLORS[ci], false)); this.racers[i].colorIdx = ci;
+        const rv = lineup[i];
+        this.racers.push(new Racer(this, slot, charById(rv.char), kartById(rv.kart), KART_COLORS[rv.color] || null, false)); this.racers[i].colorIdx = rv.color;
       }
     }
     this.player = this.racers[total - 1];
     const wOpts = { scene: this.scene, track: tr, fx: this.fx, quality: this.quality, B: k => (this.bloom ? k : 1), shadows: this.shadows, rand: rng(def.seed * 7 + 5), onEvent: (e, d) => this.emit(e, d) };
     // en contrarreloj no hay obstáculos ni meteoritos: la vuelta debe depender solo del piloto
-    this.hazards = new Hazards(solo ? null : ex.hazard, wOpts);
+    this.hazards = new Hazards(solo || this.noHazards ? null : ex.hazard, wOpts);
     this.weather = new Weather(solo && ex.weather === 'ash' ? 'none' : ex.weather, wOpts);
     this.underwater = new Underwater(wOpts);
     if (solo) {
@@ -430,7 +456,7 @@ export class Race {
       if (this.ghostData && this.ghostData.length > 6) {
         const gm = new THREE.MeshBasicMaterial({ color: 0x7fe8ff, transparent: true, opacity: 0.32, depthWrite: false });
         this.ghost = new THREE.Group(); this.ghostIdx = this.player.idx;
-        const gk = makeKart(pk, null, gm), gg = mountGorilla(gk, makeGorilla(pc, gm));
+        const gk = makeKart(pk, null, gm, this.playerWheel), gg = mountGorilla(gk, makeGorilla(pc, gm, false, this.playerHat));
         animateGorilla(gg, 0, {}); this.ghost.add(gk, gg);
         this.scene.add(this.ghost);
       }
@@ -501,6 +527,7 @@ export class Race {
     if (!r.item || r.spinT > 0) return;
     const it = r.item, fx = this.fx, tr = this.track, loud = r.isPlayer || r.near(), pan = r.isPlayer ? 0 : this.panOf(r.x, r.z), vol = r.isPlayer ? 1 : 0.6;
     r.itemCount--; if (r.itemCount <= 0) { r.item = null; r.itemCount = 0; }
+    r.st.items++;
     const f = [Math.sin(r.h), Math.cos(r.h)];
     if (it === 'turbo') { r.boost(1.9); if (loud) sfx.boost(pan, vol); if (r.isPlayer) A.haptic?.('boost'); }
     else if (it === 'shield') { r.shieldT = 12; if (loud) sfx.shield(pan, vol); }
@@ -530,7 +557,7 @@ export class Race {
       const m = new THREE.Mesh(this.waveGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff7a3c).multiplyScalar(this.glowK), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
       m.rotation.x = -Math.PI / 2; m.position.set(r.x, r.y + 0.4, r.z); this.scene.add(m);
       this.waves.push({ mesh: m, t: 0 });
-      for (const o of this.racers) if (o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 30 * 30) o.hit();
+      for (const o of this.racers) if (o !== r && (o.x - r.x) ** 2 + (o.z - r.z) ** 2 < 30 * 30) o.hit(r);
       if (loud) this.shake = Math.max(this.shake, 0.35);
     } else if (it === 'bolt') {
       sfx.zap?.(0, loud ? 1 : 0.7); this.emit('flash');
@@ -547,10 +574,23 @@ export class Race {
         fx.add.burst(o.x, o.y + 1.2, o.z, 16, [0xfff6a0, 0xffffff], 9, 9, 0.4);
         if (o.shieldT > 0) { o.shieldT = 0; if (o.isPlayer) sfx.shieldBreak(); continue; }
         o.shrinkT = 4.5; o.speed *= 0.75; o.drifting = false; o.charge = 0;
+        o.st.hitsTaken++; r.st.hitsDealt++;
         if (o.isPlayer) { sfx.shrink?.(); A.haptic?.('hit'); this.shake = 0.3; this.voice(o, 'tiny'); }
       }
     }
     if (r.isPlayer) this.emit('used', it);
+  }
+
+  // Bocina del jugador: suena, saluda y los rivales de delante miran atrás
+  honk(r) {
+    if (this.hornCd > 0 || r.spinT > 0) return;
+    this.hornCd = 0.5; sfx.horn?.(this.playerHorn);
+    r.tauntT = Math.max(r.tauntT, 0.45);
+    for (const o of this.racers) {
+      const dp = o.prog - r.prog;
+      if (o !== r && dp > 0 && dp < 9 && o.spinT <= 0) { o.lookT = 0.85; o.lookDir = r.lat >= o.lat ? 1 : -1; o.lookCd = 3; }
+    }
+    this.emit('horn');
   }
 
   aiControl(r, dt) {
@@ -620,13 +660,13 @@ export class Race {
     const order = this.ranking(), extra = this.state === 'finished' ? this.stateT : 0;
     return order.map((r, i) => ({
       name: r.char.name, isPlayer: r.isPlayer, pos: i + 1, char: r.char, kart: r.kartDef, color: r.colorIdx,
-      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (LAPS * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas,
+      time: r.finished ? r.finishTime : this.time + extra + Math.max(0.3, (this.laps * this.track.N - r.prog) * this.track.spacing / (r.maxSpeed * 0.9)), bananas: r.bananas, st: r.st, hat: r.hat, wheels: r.wheels,
     }));
   }
 
   update(dt, input) {
     const tr = this.track, N = tr.N, S = tr.samples;
-    this.t += dt; this.stateT += dt; this.voiceCd -= dt;
+    this.t += dt; this.stateT += dt; this.voiceCd -= dt; this.hornCd -= dt;
     const p = this.player, driftEdge = input.drift && !this.prevDrift;
 
     if (this.state === 'intro') {
@@ -642,14 +682,14 @@ export class Race {
           for (const r of this.racers) if (!r.isPlayer) r.boostT = Math.random() * 0.8;
           // salida turbo: pulsar DERRAPE justo en el «¡YA!»
           const early = 3 - this.pressT;
-          if (early <= 0.35) { p.boost(1.6); this.emit('startBoost'); }
+          if (early <= 0.35) { p.boost(1.6); p.st.startBoost = true; this.emit('startBoost'); }
           else if (early < 1.3) { p.stallT = 0.85; this.emit('stall'); }
           else this.goWindow = 0.22;
         }
       }
     } else if (this.state === 'racing') {
       this.time += dt;
-      if (this.goWindow > 0) { this.goWindow -= dt; if (driftEdge) { this.goWindow = 0; p.boost(1.1); this.emit('startBoost'); } }
+      if (this.goWindow > 0) { this.goWindow -= dt; if (driftEdge) { this.goWindow = 0; p.boost(1.1); p.st.startBoost = true; this.emit('startBoost'); } }
     }
 
     const moving = this.state === 'racing' || this.state === 'finished';
@@ -660,14 +700,15 @@ export class Race {
       else if (r.isPlayer && !r.finished) {
         ctl = { steer: input.steer, accel: !input.brake, brake: input.brake, drift: input.drift, trick: driftEdge };
         if (input.itemPressed && r.item) this.useItem(r);
+        else if ((input.itemPressed && r.rolling <= 0) || input.hornPressed) this.honk(r); // sin objeto, el botón toca la bocina
       } else ctl = this.aiControl(r, dt);
       if (!ctl) { r.speed = 0; r.vx = r.vz = 0; r.t += dt; } else r.step(dt, ctl);
     }
     this.prevDrift = input.drift;
     if (this.state === 'racing') {
       const lapNow = Math.floor(p.prog / N);
-      if (lapNow > lapBefore && lapNow > (p.maxLap || 0) && lapNow < LAPS) {
-        p.maxLap = lapNow; this.emit(lapNow === LAPS - 1 ? 'finalLap' : 'lap', lapNow + 1);
+      if (lapNow > lapBefore && lapNow > (p.maxLap || 0) && lapNow < this.laps) {
+        p.maxLap = lapNow; this.emit(lapNow === this.laps - 1 ? 'finalLap' : 'lap', lapNow + 1);
       }
     }
 
@@ -680,8 +721,8 @@ export class Race {
         a.x -= dx * push; a.z -= dz * push; b.x += dx * push; b.z += dz * push;
         const rel = (b.vx - a.vx) * dx + (b.vz - a.vz) * dz;
         if (rel < 0) { a.vx += dx * rel * 0.5; a.vz += dz * rel * 0.5; b.vx -= dx * rel * 0.5; b.vz -= dz * rel * 0.5; }
-        if (a.furyT > 0 && b.furyT <= 0) b.hit(); else if (b.furyT > 0 && a.furyT <= 0) a.hit();
-        else if (a.shrinkT > 0 && b.shrinkT <= 0 && b.speed > 30) a.hit(); else if (b.shrinkT > 0 && a.shrinkT <= 0 && a.speed > 30) b.hit();
+        if (a.furyT > 0 && b.furyT <= 0) b.hit(a); else if (b.furyT > 0 && a.furyT <= 0) a.hit(b);
+        else if (a.shrinkT > 0 && b.shrinkT <= 0 && b.speed > 30) a.hit(b); else if (b.shrinkT > 0 && a.shrinkT <= 0 && a.speed > 30) b.hit(a);
         else if ((a.isPlayer || b.isPlayer) && a.bumpCd <= 0 && b.bumpCd <= 0) { sfx.bump(); A.haptic?.('bump'); a.bumpCd = b.bumpCd = 0.4; this.shock((a.x + b.x) / 2, a.y + 1, (a.z + b.z) / 2, 0xffffff, 3.2, 0.25); }
       }
     }
@@ -692,7 +733,7 @@ export class Race {
       for (const r of this.racers) {
         if (r === pe.owner && pe.age < 0.8) continue;
         if ((r.x - pe.x) ** 2 + (r.z - pe.z) ** 2 < 4.4 && r.hopY < 1) {
-          r.hit(); this.scene.remove(pe.mesh); this.peels.splice(i, 1); break;
+          r.hit(pe.owner); this.scene.remove(pe.mesh); this.peels.splice(i, 1); break;
         }
       }
     }
@@ -713,7 +754,7 @@ export class Race {
       let dead = c.life <= 0;
       for (const r of this.racers) {
         if (r === c.owner) continue;
-        if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 7.5 && r.hopY < 2.5) { r.hit(); dead = true; break; }
+        if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 7.5 && r.hopY < 2.5) { r.hit(c.owner); dead = true; break; }
       }
       if (dead) { this.fx.add.burst(q.x, q.y + 1.2, q.z, 18, [0x7a4a22, 0xffffff, 0xffb060], 9, 8, 0.5, 10); this.scene.remove(c.mesh); this.cocos.splice(i, 1); }
     }
@@ -731,7 +772,7 @@ export class Race {
       let dead = b.age > 7;
       for (const r of this.racers) {
         if (r === b.owner && b.age < 1) continue;
-        if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 6.5 && r.hopY < 2) { r.hit(); dead = true; break; }
+        if ((r.x - q.x) ** 2 + (r.z - q.z) ** 2 < 6.5 && r.hopY < 2) { r.hit(b.owner); dead = true; break; }
       }
       if (dead) {
         this.fx.norm.burst(q.x, q.y + 1, q.z, 16, [0xa8643a, 0x6a3a1a, 0xffd21f], 10, 10, 0.7, 14);
@@ -765,10 +806,11 @@ export class Race {
     this.ranking();
     for (const r of this.racers) {
       if (this.state === 'racing' && this.time > 4 && r.pos !== r.prevPos) {
-        if (r.pos < r.prevPos) { r.tauntT = 1.1; this.voice(r, 'laugh'); if (r.isPlayer) sfx.whoosh?.(); }
+        if (r.pos < r.prevPos) { r.tauntT = 1.1; r.st.overtakes++; this.voice(r, 'laugh'); if (r.isPlayer) sfx.whoosh?.(); }
         else { r.angryT = 1.3; if (r.isPlayer) sfx.whoosh?.(0, 0.6); }
       }
       r.prevPos = r.pos;
+      if (this.state === 'racing' && r.pos < r.st.bestPos) r.st.bestPos = r.pos;
       // mira hacia atrás si le pisan los talones
       if (moving && r.lookCd <= 0 && r.spinT <= 0) {
         for (const o of this.racers) {

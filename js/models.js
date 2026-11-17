@@ -92,18 +92,93 @@ const FACES = {
 }; // [ángulo ceja, altura ceja, ancho boca, apertura boca, dientes, apertura ojo]
 const DARK = 0x16161c, WHITE = 0xffffff;
 
+// Accesorio propio de cada personaje (ch.acc): añade sus piezas a la cabeza h con el color acc
+const ACC_BUILD = {
+  cap(h, acc) { h.push([sphere(0.47), acc, [0, 0.14, -0.02], [1.02, 0.75, 1.04]], [box(0.5, 0.05, 0.36), acc, [0, 0.24, 0.5]], [sphere(0.07, 8), WHITE, [0, 0.5, -0.02]]); },
+  bow(h, acc) { for (const s of [-1, 1]) h.push([cone(0.17, 0.3, 8), acc, [0.17 * s, 0.56, 0], null, [0, 0, s * HPI]]); h.push([sphere(0.08, 8), acc, [0, 0.56, 0]]); },
+  glasses(h, acc) { for (const s of [-1, 1]) h.push([box(0.22, 0.14, 0.05), acc, [0.15 * s, 0.03, 0.535]]); h.push([box(0.9, 0.04, 0.04), acc, [0, 0.06, 0.5]]); },
+  headphones(h, acc) { h.push([torus(0.5, 0.05), acc, [0, 0.06, 0]]); for (const s of [-1, 1]) h.push([cyl(0.17, 0.17, 0.12), acc, [0.5 * s, 0.02, 0], null, [0, 0, HPI]]); },
+  mohawk(h, acc) { for (let i = 0; i < 5; i++) h.push([cone(0.1, 0.34, 6), acc, [0, 0.5 - Math.abs(i - 1.5) * 0.04, 0.3 - i * 0.16], null, [-0.3 + i * 0.2, 0, 0]]); },
+  crown(h, acc) {
+    h.push([cyl(0.3, 0.26, 0.16, 10), acc, [0, 0.58, -0.03]]);
+    for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; h.push([cone(0.07, 0.2, 5), acc, [Math.sin(a) * 0.27, 0.74, Math.cos(a) * 0.27 - 0.03]]); }
+  },
+  // gafas de aviador subidas a la frente
+  goggles(h, acc) {
+    h.push([torus(0.41, 0.04), 0x5a3a22, [0, 0.27, -0.01], [1, 1.04, 1], [HPI, 0, 0]]);
+    for (const s of [-1, 1]) h.push([cyl(0.125, 0.125, 0.09, 12), acc, [0.145 * s, 0.31, 0.37], null, [HPI - 0.4, 0, 0]], [cyl(0.085, 0.085, 0.1, 12), 0xbfefff, [0.145 * s, 0.313, 0.378], null, [HPI - 0.4, 0, 0]]);
+  },
+  // cinta en la frente con el nudo y dos puntas por detrás
+  bandana(h, acc) {
+    h.push([torus(0.43, 0.06), acc, [0, 0.23, -0.01], [1, 1.04, 0.8], [HPI, 0, 0]], [sphere(0.09, 8), acc, [0, 0.23, -0.47]]);
+    for (const s of [-1, 1]) h.push([box(0.1, 0.34, 0.03), acc, [0.09 * s, 0.07, -0.52], null, [0.35, 0, 0.3 * s]]);
+  },
+};
+const FACE_ACC = { glasses: 1 }; // accesorios de la cara: se conservan aunque lleve sombrero
+
+// Sombreros de la tienda (id de HATS en shop.js): sustituyen al accesorio. La coronilla está en y ≈ 0.58.
+const HAT_BUILD = {
+  fiesta(h) {
+    h.push([cone(0.24, 0.62, 12), 0xff4fd8, [0.02, 0.82, -0.05], null, [-0.1, 0, -0.08]], [torus(0.235, 0.045), WHITE, [0, 0.53, -0.03], null, [HPI, 0, 0]],
+      [torus(0.16, 0.035), 0xffd21f, [0.01, 0.7, -0.04], null, [HPI, 0, 0]], [torus(0.09, 0.03), 0x22e6ff, [0.03, 0.9, -0.06], null, [HPI, 0, 0]], [sphere(0.09, 8), 0xffd21f, [0.045, 1.15, -0.08]]);
+  },
+  flor(h) {
+    const c = [0.3, 0.46, 0.13];
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; h.push([sphere(0.12, 8), 0xff5ec4, [c[0] + Math.cos(a) * 0.14, c[1] + Math.sin(a) * 0.14, c[2]], [1, 1, 0.45]]); }
+    h.push([sphere(0.085, 8), 0xffe14a, [c[0], c[1], c[2] + 0.05]], [cone(0.09, 0.3, 4), 0x2fae4a, [c[0] + 0.2, c[1] - 0.2, c[2] - 0.04], [1, 1, 0.4], [0, 0, -2.2]]);
+  },
+  gorra(h) {
+    h.push([sphere(0.47), 0x31b6ff, [0, 0.14, -0.02], [1.02, 0.75, 1.04]], [box(0.5, 0.05, 0.38), 0x1a6ad8, [0, 0.2, -0.56], null, [0.18, 0, 0]],
+      [sphere(0.07, 8), WHITE, [0, 0.5, -0.02]], [box(0.3, 0.14, 0.04), WHITE, [0, 0.3, 0.45], null, [-0.35, 0, 0]]);
+  },
+  chistera(h) {
+    h.push([cyl(0.5, 0.5, 0.05, 18), 0x22222c, [0, 0.5, -0.03]], [cyl(0.34, 0.3, 0.5, 18), 0x22222c, [0, 0.77, -0.03]], [cyl(0.315, 0.31, 0.11, 18), 0xff3b4a, [0, 0.585, -0.03]]);
+  },
+  pirata(h) {
+    h.push([sphere(0.47), 0x22222c, [0, 0.24, -0.02], [1.03, 0.8, 1.03]], [cyl(0.66, 0.66, 0.07, 3), 0x22222c, [0, 0.4, -0.06]], [cyl(0.67, 0.67, 0.03, 3), 0xffd21f, [0, 0.4, -0.06]],
+      [sphere(0.085, 8), WHITE, [0, 0.47, 0.43]], [box(0.07, 0.07, 0.04), WHITE, [0, 0.4, 0.46]]);
+    for (const s of [-1, 1]) h.push([box(0.3, 0.045, 0.03), WHITE, [0, 0.45, 0.44], null, [-0.5, 0, 0.6 * s]]);
+  },
+  casco(h) {
+    h.push([sphere(0.5), 0xff3b4a, [0, 0.2, -0.04], [1.03, 0.82, 1.06]], [sphere(0.5), WHITE, [0, 0.2, -0.04], [0.24, 0.84, 1.08]],
+      [box(0.74, 0.15, 0.06), 0x22e6ff, [0, 0.4, 0.42], null, [-0.55, 0, 0]]);
+    for (const s of [-1, 1]) h.push([cyl(0.16, 0.16, 0.1, 12), 0x22222c, [0.5 * s, -0.02, 0.02], null, [0, 0, HPI]]);
+  },
+  vikingo(h) {
+    h.push([sphere(0.47), 0xaab4c4, [0, 0.2, -0.02], [1.03, 0.85, 1.05]], [torus(0.47, 0.05), 0xd9a11c, [0, 0.2, -0.02], [1.03, 1.05, 1], [HPI, 0, 0]], [sphere(0.08, 8), 0xd9a11c, [0, 0.61, -0.02]]);
+    for (const s of [-1, 1]) h.push([cyl(0.075, 0.125, 0.36, 8), 0xfff3d6, [0.56 * s, 0.36, -0.02], null, [0, 0, -1.05 * s]], [cone(0.085, 0.36, 8), 0xfff3d6, [0.76 * s, 0.6, -0.02], null, [0, 0, -0.2 * s]]);
+  },
+  corona(h) {
+    h.push([cyl(0.34, 0.3, 0.2, 12), 0xffd21f, [0, 0.6, -0.03]], [sphere(0.29), 0xc0183a, [0, 0.68, -0.03], [1, 0.62, 1]], [sphere(0.06, 8), 0xffd21f, [0, 0.89, -0.03]]);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2, sx = Math.sin(a), cz = Math.cos(a);
+      h.push([cone(0.08, 0.24, 5), 0xffd21f, [sx * 0.31, 0.8, cz * 0.31 - 0.03]], [sphere(0.05, 6), i % 2 ? 0x22e6ff : 0xff3b4a, [sx * 0.335, 0.6, cz * 0.335 - 0.03]]);
+    }
+  },
+};
+const HAT_KEEPS_TUFTS = { flor: 1 }; // sombreros que dejan ver los mechones de la coronilla
+
+// Geometrías del gorila en caché, por piezas: el tronco depende de la postura, la cabeza del sombrero
+// (su clave lo incluye) y los brazos solo del personaje. Así un sombrero nuevo solo crea una cabeza.
 const gorillaCache = new Map();
-function gorillaGeos(ch, standing) {
-  const key = ch.id + (standing ? '_s' : '');
-  if (gorillaCache.has(key)) return gorillaCache.get(key);
-  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72), skinD = shade(skin, 0.7);
+const gorillaPart = (key, make) => { let g = gorillaCache.get(key); if (!g) gorillaCache.set(key, g = make()); return g; };
+function gorillaGeos(ch, standing, hat) {
+  const hatFn = (hat && HAT_BUILD[hat]) || null;
+  return {
+    torso: gorillaPart(ch.id + (standing ? '_torso_s' : '_torso'), () => gorillaTorso(ch, standing)),
+    head: gorillaPart(ch.id + '_head' + (hatFn ? '_' + hat : ''), () => gorillaHead(ch, hat, hatFn)),
+    armP: gorillaPart(ch.id + '_armP', () => gorillaArm(ch, 1)), armN: gorillaPart(ch.id + '_armN', () => gorillaArm(ch, -1)),
+  };
+}
+function gorillaTorso(ch, standing) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72);
   // --- tronco y piernas ---
   const t = [
     [sphere(0.62), fur, [0, 0.75, 0], [1.15, 1.1, 0.95]],
     [sphere(0.45), skin, [0, 0.84, 0.34], [1.1, 0.9, 0.5]],
     [sphere(0.3, 10), skin, [-0.2, 0.98, 0.38], [1, 0.8, 0.5]], [sphere(0.3, 10), skin, [0.2, 0.98, 0.38], [1, 0.8, 0.5]],
     [sphere(0.035, 6), DARK, [0, 0.52, 0.56]],
-    [sphere(0.2, 8), furD, [0, 0.95, -0.5], [1.6, 1.8, 0.6]],
+    [sphere(0.2, 8), ch.back || furD, [0, 0.95, -0.5], [1.6, 1.8, 0.6]],
     [torus(0.34, 0.08), acc, [0, 1.25, 0.04], [1, 1, 0.9], [HPI + 0.15, 0, 0]],
     [cone(0.16, 0.34, 4), acc, [0.12, 1.08, 0.38], [1, 1, 0.4], [0.2, 0, Math.PI + 0.25]],
   ];
@@ -116,39 +191,35 @@ function gorillaGeos(ch, standing) {
       for (let i = -1; i <= 1; i++) t.push([sphere(0.075, 8), skin, [0.32 * s + i * 0.11, 0.24, 1.1]]);
     }
   }
+  return bake(t);
+}
+function gorillaHead(ch, hat, hatFn) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72), skinD = shade(skin, 0.7);
   // --- cabeza ---
   const h = [
     [sphere(0.46), fur, null, [1, 1.05, 1]], [sphere(0.3), fur, [0, 0.3, -0.06], [0.9, 0.95, 1.05]],
     [sphere(0.36), skin, [0, -0.02, 0.2], [1, 0.95, 0.72]], [sphere(0.24), skin, [0, -0.17, 0.36], [1.2, 0.82, 0.85]],
     [box(0.62, 0.11, 0.2), fur, [0, 0.14, 0.36]],
   ];
-  for (const [x, y, z, r] of [[0, 0.62, 0.02, 0], [-0.13, 0.57, -0.02, 0.45], [0.13, 0.57, -0.02, -0.45]]) h.push([cone(0.09, 0.26, 6), furD, [x, y, z], null, [0.15, 0, r]]);
+  if (!hatFn || HAT_KEEPS_TUFTS[hat]) for (const [x, y, z, r] of [[0, 0.62, 0.02, 0], [-0.13, 0.57, -0.02, 0.45], [0.13, 0.57, -0.02, -0.45]]) h.push([cone(0.09, 0.26, 6), furD, [x, y, z], null, [0.15, 0, r]]);
   for (const s of [-1, 1]) {
     h.push([sphere(0.03, 6), DARK, [0.06 * s, -0.11, 0.565]],
       [sphere(0.12, 8), skin, [0.46 * s, 0.02, -0.02], [0.6, 1, 1]], [sphere(0.065, 8), skinD, [0.5 * s, 0.02, 0.03], [0.5, 1, 1]],
       [sphere(0.2, 10), fur, [0.36 * s, -0.16, 0.12], [0.7, 1.1, 0.8]]);
     for (let i = 0; i < 2; i++) h.push([cone(0.06, 0.2, 5), furD, [0.4 * s, -0.3 - i * 0.07, 0.14 - i * 0.1], null, [0, 0, -2.4 * s]]);
   }
-  switch (ch.acc) {
-    case 'cap': h.push([sphere(0.47), acc, [0, 0.14, -0.02], [1.02, 0.75, 1.04]], [box(0.5, 0.05, 0.36), acc, [0, 0.24, 0.5]], [sphere(0.07, 8), WHITE, [0, 0.5, -0.02]]); break;
-    case 'bow': for (const s of [-1, 1]) h.push([cone(0.17, 0.3, 8), acc, [0.17 * s, 0.56, 0], null, [0, 0, s * HPI]]); h.push([sphere(0.08, 8), acc, [0, 0.56, 0]]); break;
-    case 'glasses': for (const s of [-1, 1]) h.push([box(0.22, 0.14, 0.05), acc, [0.15 * s, 0.03, 0.535]]); h.push([box(0.9, 0.04, 0.04), acc, [0, 0.06, 0.5]]); break;
-    case 'headphones': h.push([torus(0.5, 0.05), acc, [0, 0.06, 0]]); for (const s of [-1, 1]) h.push([cyl(0.17, 0.17, 0.12), acc, [0.5 * s, 0.02, 0], null, [0, 0, HPI]]); break;
-    case 'mohawk': for (let i = 0; i < 5; i++) h.push([cone(0.1, 0.34, 6), acc, [0, 0.5 - Math.abs(i - 1.5) * 0.04, 0.3 - i * 0.16], null, [-0.3 + i * 0.2, 0, 0]]); break;
-    case 'crown':
-      h.push([cyl(0.3, 0.26, 0.16, 10), acc, [0, 0.58, -0.03]]);
-      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; h.push([cone(0.07, 0.2, 5), acc, [Math.sin(a) * 0.27, 0.74, Math.cos(a) * 0.27 - 0.03]]); }
-      break;
-  }
-  // --- brazos con mano, dedos, pulgar y muñequera ---
-  const arm = s => {
-    const a = [[capsule(0.18, 0.62), fur, [0, -0.45, 0]], [sphere(0.24, 10), furD, [0, -0.1, 0], [1, 0.8, 1]], [sphere(0.2, 8), skin, [0, -0.93, 0]],
-      [torus(0.19, 0.05), acc, [0, -0.74, 0], null, [HPI, 0, 0]], [capsule(0.055, 0.09), skin, [0.19 * s, -0.98, 0.08], null, [0.2, 0, 0.9 * s]]];
-    for (let i = -1; i <= 1; i++) a.push([capsule(0.055, 0.1), skin, [i * 0.1, -1.1, 0.05], null, [0.25, 0, i * -0.18]]);
-    return bake(a);
-  };
-  const G = { torso: bake(t), head: bake(h), armP: arm(1), armN: arm(-1) };
-  gorillaCache.set(key, G); return G;
+  // accesorio del personaje o, si lleva uno, el sombrero de la tienda
+  if (hatFn) hatFn(h, acc);
+  if (ACC_BUILD[ch.acc] && (!hatFn || FACE_ACC[ch.acc])) ACC_BUILD[ch.acc](h, acc);
+  return bake(h);
+}
+// --- brazo con mano, dedos, pulgar y muñequera ---
+function gorillaArm(ch, s) {
+  const fur = ch.fur, skin = ch.skin, acc = ch.accColor, furD = shade(fur, 0.72);
+  const a = [[capsule(0.18, 0.62), fur, [0, -0.45, 0]], [sphere(0.24, 10), furD, [0, -0.1, 0], [1, 0.8, 1]], [sphere(0.2, 8), skin, [0, -0.93, 0]],
+    [torus(0.19, 0.05), acc, [0, -0.74, 0], null, [HPI, 0, 0]], [capsule(0.055, 0.09), skin, [0.19 * s, -0.98, 0.08], null, [0.2, 0, 0.9 * s]]];
+  for (let i = -1; i <= 1; i++) a.push([capsule(0.055, 0.1), skin, [i * 0.1, -1.1, 0.05], null, [0.25, 0, i * -0.18]]);
+  return bake(a);
 }
 let faceG = null;
 function faceGeos() {
@@ -163,8 +234,9 @@ function faceGeos() {
   return faceG;
 }
 
-export function makeGorilla(ch, override, standing = false) {
-  const G = gorillaGeos(ch, standing), F = faceGeos(), M = override || toonVC, ol = !override;
+// hat: id de sombrero de la tienda (null o 'none' = el accesorio propio del personaje)
+export function makeGorilla(ch, override, standing = false, hat = null) {
+  const G = gorillaGeos(ch, standing, hat), F = faceGeos(), M = override || toonVC, ol = !override;
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
   part(body, G.torso, M, ol);
@@ -313,13 +385,83 @@ const KART_BUILD = {
     cabin(b, 0.74, shade(c1, 0.6));
     return { parts: b, glow: g, wheels: [[1.2, 0.38, 1.25], [-1.2, 0.38, 1.25], [1.2, 0.4, -1.25], [-1.2, 0.4, -1.25]], seat: 0.74, hub: c2 };
   },
+  // Piña Turbo: una piña tumbada, con la corona de hojas como alerón y dos escapes
+  pina(c1, c2) {
+    const b = [[sphere(1, 16), c1, [0, 0.9, 0.15], [1.08, 0.72, 2.25]]], dark = shade(c1, 0.7), leaf2 = shade(c2, 0.78);
+    // rombos de la piel: filas de bultos alternadas (se dejan libres la cabina y la panza)
+    for (let i = 0; i < 9; i++) {
+      const t = -0.84 + i * 0.21, rad = Math.sqrt(1 - t * t), z = 0.15 + t * 2.25;
+      for (let j = 0; j < 8; j++) {
+        const a = -1.75 + (j + (i % 2) * 0.5) * 0.47, x = Math.sin(a) * 1.08 * rad, y = 0.9 + Math.cos(a) * 0.72 * rad;
+        if (a > 1.8 || (Math.abs(x) < 0.7 && z > -1.45 && z < 1.0 && y > 1.2)) continue;
+        b.push([sphere(0.13, 6), dark, [x, y, z], [1, 0.75, 1]]);
+      }
+    }
+    for (const [ax, zs, n, len] of [[-1.15, 0.34, 5, 1.25], [-0.6, 0.38, 4, 1.05], [-0.15, 0.5, 3, 0.85]]) for (let i = 0; i < n; i++) {
+      const az = (i - (n - 1) / 2) * zs;
+      b.push([cone(0.24, len, 5), i % 2 ? leaf2 : c2, [-Math.sin(az) * 0.5, 1.25 + Math.cos(ax) * 0.5 * Math.cos(az), -2.0 + Math.sin(ax) * 0.5 * Math.cos(az)], [1, 1, 0.45], [ax, 0, az]]);
+    }
+    for (const s of [-1, 1]) b.push([cyl(0.11, 0.16, 0.9, 8), METAL, [0.8 * s, 0.62, -1.75], null, [HPI + 0.15, 0, 0]], [cyl(0.085, 0.085, 0.06, 8), DARK, [0.8 * s, 0.56, -2.2], null, [HPI + 0.15, 0, 0]]);
+    cabin(b, 0.98, c2);
+    return { parts: b, glow: [[sphere(0.13, 8), LIGHT, [0.4, 0.95, 2.2]], [sphere(0.13, 8), LIGHT, [-0.4, 0.95, 2.2]]],
+      wheels: [[1.15, 0.44, 1.3], [-1.15, 0.44, 1.3], [1.18, 0.5, -1.15], [-1.18, 0.5, -1.15]], seat: 0.98, hub: c2 };
+  },
+  // Tiburón Feroz: morro con dientes, aleta dorsal, aletas laterales y cola
+  tiburon(c1, c2) {
+    const dark = shade(c1, 0.62), b = [
+      [capsule(0.8, 2.3), c1, [0, 0.82, -0.2], [1.12, 1, 0.7], [HPI, 0, 0]], [capsule(0.74, 2.2), c2, [0, 0.5, -0.1], [1.1, 1, 0.55], [HPI, 0, 0]],
+      [cone(0.8, 1.7, 14), c1, [0, 0.9, 2.2], [1.05, 1, 0.52], [HPI, 0, 0]], [cone(0.62, 1.5, 12), c2, [0, 0.48, 1.9], [1.05, 1, 0.32], [HPI - 0.16, 0, 0]],
+      [box(0.62, 0.12, 1.2), 0x8a1a2a, [0, 0.66, 1.95], null, [-0.2, 0, 0]],
+      [cone(0.5, 1.5, 8), c1, [0, 0.84, -2.55], [1, 1, 0.75], [-HPI, 0, 0]],
+      [cone(0.55, 1.25, 4), c1, [0, 1.85, -1.85], [0.16, 1, 1], [-0.45, 0, 0]],
+      [cone(0.42, 1.4, 4), c1, [0, 1.42, -3.15], [0.14, 1, 1], [-0.7, 0, 0]], [cone(0.34, 0.9, 4), c1, [0, 0.42, -3.1], [0.14, 1, 1], [-2.35, 0, 0]],
+    ];
+    for (const s of [-1, 1]) {
+      // dientes a lo largo del borde del morro (que sube hacia la punta)
+      for (let z = 1.45; z <= 2.66; z += 0.3) { const k = 1 - (z - 1.35) / 1.7; b.push([cone(0.075, 0.22, 5), WHITE, [0.84 * k * 0.66 * s, 0.86 - 0.416 * k * 0.72, z], null, [Math.PI, 0, 0]]); }
+      for (let z = 1.9; z <= 2.51; z += 0.3) b.push([cone(0.06, 0.17, 5), WHITE, [(0.3 - (z - 1.9) * 0.3) * s, 0.5 + (z - 1.16) * 0.1, z]]);
+      b.push([sphere(0.15, 10), WHITE, [0.62 * s, 1.08, 1.5]], [sphere(0.08, 8), DARK, [0.69 * s, 1.08, 1.6]], [box(0.34, 0.07, 0.12), dark, [0.62 * s, 1.25, 1.54], null, [0, 0, 0.5 * s]],
+        [cone(0.42, 1.0, 4), c1, [1.2 * s, 0.5, 0.25], [0.14, 1, 1], [-0.35, 0, -1.85 * s]], [sphere(0.05, 6), DARK, [0.14 * s, 0.955, 2.75]]);
+      for (let i = 0; i < 3; i++) b.push([box(0.04, 0.36, 0.07), dark, [0.9 * s, 0.86, 0.95 - i * 0.2], null, [0.25, 0, 0]]);
+    }
+    cabin(b, 0.76, dark);
+    return { parts: b, glow: [], wheels: STD_WHEELS, seat: 0.76, hub: c2 };
+  },
 };
+
+// Estilos de rueda de la tienda (id de WHEELS en shop.js)
+// tire / hub / band: colores (por defecto, los del coche) · glow: aros luminosos · k: radio · w: anchura · knobs: tacos
+const WHEEL_STYLES = {
+  std: {},
+  blancas: { tire: 0xf4f4f4, band: 0xb9c2d0 },
+  oro: { tire: 0x2a2418, hub: 0xffd21f, band: 0xffd21f, cap: 0xffe45a },
+  neon: { tire: 0x14141c, hub: 0x14141c, band: 0x14141c, glow: 0x22e6ff },
+  monstruo: { tire: 0x1c1c24, band: 0x2c2c38, k: 1.24, w: 1.3, knobs: true },
+};
+const wheelStyle = id => WHEEL_STYLES[id] || WHEEL_STYLES.std;
 const kartCache = new Map();
-function wheelGeo(r, hub) {
-  return geo('wheel' + r + '_' + hub, () => {
-    const w = [[cyl(1, 1, 0.42, 14), SEAT, null, [r, 1, r], [0, 0, HPI]], [cyl(0.5, 0.5, 0.46, 6), hub, null, [r, 1, r], [0, 0, HPI]]];
-    for (const o of [-0.13, 0, 0.13]) w.push([torus(r, 0.035), 0x3a3a48, [o, 0, 0], null, [0, HPI, 0]]);
+function wheelGeo(r, hub, style = 'std') {
+  const S = wheelStyle(style);
+  return geo('wheel' + r + '_' + hub + '_' + style, () => {
+    const wd = 0.42 * (S.w || 1), w = [[cyl(1, 1, wd, 14), S.tire ?? SEAT, null, [r, 1, r], [0, 0, HPI]], [cyl(0.5, 0.5, wd + 0.04, 6), S.hub ?? hub, null, [r, 1, r], [0, 0, HPI]]];
+    for (const o of [-0.31, 0, 0.31]) w.push([torus(r, 0.035), S.band ?? 0x3a3a48, [o * wd, 0, 0], null, [0, HPI, 0]]);
+    if (S.cap != null) for (const s of [-1, 1]) w.push([cyl(0.22, 0.22, 0.04, 10), S.cap, [s * (wd / 2 + 0.03), 0, 0], [r, 1, r], [0, 0, HPI]]);
+    if (S.knobs) for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2;
+      for (const s of [-1, 1]) w.push([box(wd * 0.42, 0.11, 0.2), 0x30303c, [s * wd * 0.26, Math.cos(a + s * 0.16) * r, Math.sin(a + s * 0.16) * r], null, [a + s * 0.16, 0, 0]]);
+    }
     return bake(w);
+  });
+}
+// aros luminosos del estilo neón (malla aparte, sin sombreado)
+function wheelGlowGeo(r, style) {
+  const S = wheelStyle(style);
+  if (S.glow == null) return null;
+  return geo('wheelglow' + r + '_' + style, () => {
+    const wd = 0.42 * (S.w || 1), g = [];
+    for (const s of [-1, 1]) g.push([torus(r * 0.74, 0.045), S.glow, [s * (wd / 2 + 0.015), 0, 0], null, [0, HPI, 0]], [cyl(0.16, 0.16, 0.03, 8), S.glow, [s * (wd / 2 + 0.03), 0, 0], [r, 1, r], [0, 0, HPI]]);
+    g.push([torus(r * 1.005, 0.03), S.glow, null, null, [0, HPI, 0]]);
+    return bake(g, 1.5);
   });
 }
 function kartGeos(def, color) {
@@ -331,20 +473,25 @@ function kartGeos(def, color) {
   kartCache.set(key, K); return K;
 }
 
-export function makeKart(def, colorOverride, override) {
-  const K = kartGeos(def, colorOverride), M = override || toonVC, ol = !override;
+// wheels: id de estilo de rueda de la tienda (null = estándar). Las ruedas grandes levantan la carrocería.
+export function makeKart(def, colorOverride, override, wheels = null) {
+  const K = kartGeos(def, colorOverride), M = override || toonVC, ol = !override, S = wheelStyle(wheels), wk = S.k || 1;
   const k = new THREE.Group(), bodyG = new THREE.Group(); k.add(bodyG);
   part(bodyG, K.body, M, ol);
   if (K.glow) part(bodyG, K.glow, override || glowVC);
   const wheel = part(bodyG, K.steer, M); wheel.position.set(0, K.seat + 0.69, 0.38); wheel.rotation.set(-0.75, 0, 0);
-  const wheels = [];
-  for (const [x, r, z] of K.wheels) {
-    const pivot = new THREE.Group(); pivot.position.set(x, r, z);
+  const list = [];
+  let lift = 0;
+  for (const [x, r0, z] of K.wheels) {
+    const r = Math.round(r0 * wk * 1000) / 1000, px = x + Math.sign(x) * (wk - 1) * 0.55; lift = Math.max(lift, r - r0);
+    const pivot = new THREE.Group(); pivot.position.set(px, r, z);
     const spin = new THREE.Group(); pivot.add(spin);
-    part(spin, wheelGeo(r, K.hub), M, ol);
-    k.add(pivot); wheels.push({ pivot, spin, front: z > 0, x, y: r });
+    part(spin, wheelGeo(r, K.hub, wheels || 'std'), M, ol);
+    const glow = wheelGlowGeo(r, wheels); if (glow) part(spin, glow, override || glowVC);
+    k.add(pivot); list.push({ pivot, spin, front: z > 0, x: px, y: r });
   }
-  k.userData = { bodyG, wheels, wheel, seat: K.seat };
+  bodyG.position.y = lift;
+  k.userData = { bodyG, wheels: list, wheel, seat: K.seat + lift };
   return k;
 }
 // Coloca al gorila en el asiento del coche

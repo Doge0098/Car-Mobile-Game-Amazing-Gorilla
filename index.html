@@ -41,10 +41,22 @@
     <button class="btn c1" data-go="race">🏁 Carrera rápida</button>
     <button class="btn c2" data-go="cups">🏆 Copas</button>
     <button class="btn c3" data-go="time">⏱️ Contrarreloj</button>
-    <button class="btn c4" data-go="garage">🦍 Garaje</button>
-    <button class="btn c5" data-go="settings">⚙️ Ajustes</button>
+    <button class="btn c4 half" data-go="garage">🦍 Garaje</button>
+    <button class="btn c7 half" data-go="meta">🏅 Misiones y logros</button>
+    <button class="btn c5 half" data-go="settings">⚙️ Ajustes</button>
+    <button class="btn c8 half" data-go="tutorial">🎓 Tutorial</button>
     <button class="btn c6 hidden" id="btn-install">📲 Instalar juego</button>
   </nav>
+</section>
+
+<!-- OFERTA DEL TUTORIAL (primera vez) -->
+<section id="s-tutoask" class="screen modal">
+  <div class="box">
+    <h2>¿Te enseño a jugar?</h2>
+    <p class="ask">Gira, derrapa y usa objetos en una carrera guiada de un par de minutos.<br>Al terminar te llevas <span id="tuto-reward">50</span> 🍌.</p>
+    <button class="btn c1" id="tuto-yes">🎓 Jugar el tutorial</button>
+    <button class="btn c5" id="tuto-no">Ahora no</button>
+  </div>
 </section>
 
 <!-- SELECCIÓN DE MAPA -->
@@ -75,11 +87,7 @@
     <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
   </header>
   <div class="garage-panel">
-    <div class="tabs">
-      <button class="tab active" data-tab="chars">Gorilas</button>
-      <button class="tab" data-tab="karts">Coches</button>
-      <button class="tab" data-tab="colors">Color</button>
-    </div>
+    <div class="tabs" id="garage-tabs"></div>
     <div class="strip" id="garage-strip"></div>
     <div class="info">
       <div class="info-text">
@@ -92,6 +100,21 @@
   </div>
 </section>
 
+<!-- MISIONES Y LOGROS -->
+<section id="s-meta" class="screen panel">
+  <header class="topbar">
+    <button class="btn back" data-back>◀</button>
+    <h2>Misiones y logros</h2>
+    <div class="wallet"><span>🍌</span><b class="bananas">0</b></div>
+  </header>
+  <div class="tabs" id="meta-tabs">
+    <button class="tab active" data-mtab="ach">Logros</button>
+    <button class="tab" data-mtab="missions">Misiones</button>
+    <button class="tab" data-mtab="stats">Estadísticas</button>
+  </div>
+  <div class="meta-body" id="meta-body"></div>
+</section>
+
 <!-- AJUSTES -->
 <section id="s-settings" class="screen panel">
   <header class="topbar">
@@ -101,10 +124,15 @@
   <div class="settings">
     <div class="row"><label>Controles</label><div class="seg" id="set-controls">
       <button data-v="buttons">Botones</button><button data-v="tilt">Inclinar móvil</button></div></div>
+    <div class="row"><label>Tamaño de botones</label><div class="seg" id="set-btnsize">
+      <button data-v="s">Pequeño</button><button data-v="m">Normal</button><button data-v="l">Grande</button></div></div>
+    <div class="row"><label>Modo zurdo</label><div class="seg" id="set-lefty"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Opacidad de botones</label><input type="range" id="set-btnalpha" min="0.3" max="1" step="0.05"></div>
     <div class="row"><label>Música</label><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Efectos</label><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Gráficos</label><div class="seg" id="set-quality">
       <button data-v="baja">Bajos</button><button data-v="media">Medios</button><button data-v="alta">Altos</button></div></div>
+    <div class="row"><label>Calidad automática<small id="set-autoq-info"></small></label><div class="seg" id="set-autoq"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Contorno cómic</label><div class="seg" id="set-outline"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Resplandor</label><div class="seg" id="set-bloom"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
@@ -120,8 +148,9 @@
       ⚡ rayo que encoge a los rivales · 🧲 imán de plátanos · 🛢️ barril que rebota.<br>
       <b>Transformaciones:</b> en cada mapa hay un tramo de agua (barco), una gran rampa (ala delta) y una inmersión (submarino);
       el coche se transforma solo. Pasa por los aros para ganar impulso.<br>
-      <b>Gráficos:</b> si el juego va lento, baja el nivel o desactiva contorno, resplandor y sombras.<br>
-      <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, P = pausa.<br>
+      <b>Gráficos:</b> con la <b>calidad automática</b>, si el juego va lento se quitan solos sombras, contorno y resplandor. También puedes bajar el nivel a mano.<br>
+      <b>Botones:</b> puedes cambiar su tamaño y su opacidad, o pasarlos al otro lado con el modo zurdo (dirección a la derecha).<br>
+      <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, H = bocina, P = pausa.<br>
       <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
       En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
     </p>
@@ -139,6 +168,8 @@
     <div class="hud-bananas">🍌 <b id="hud-bananas">0</b></div>
     <canvas id="minimap" width="140" height="140"></canvas>
   </div>
+  <div class="hud-missions" id="hud-missions"><h4>Misiones</h4><ul class="missions" id="hud-missions-list"></ul></div>
+  <div class="hud-tuto" id="hud-tuto"><span id="hud-tuto-text"></span></div>
   <div class="hud-msg" id="hud-msg"></div>
   <div class="hud-warn hidden" id="hud-wrong">↩ ¡Sentido contrario!</div>
   <div class="hud-hint" id="hud-hint"></div>
@@ -160,6 +191,7 @@
 <section id="s-pause" class="screen modal">
   <div class="box">
     <h2>Pausa</h2>
+    <ul class="missions" id="p-missions"></ul>
     <button class="btn c1" id="p-resume">▶ Continuar</button>
     <button class="btn c3" id="p-restart">↻ Reiniciar</button>
     <button class="btn c5" id="p-quit">✕ Salir al menú</button>
@@ -180,7 +212,10 @@
   <div class="box wide">
     <h2 id="r-title">Resultados</h2>
     <p id="r-sub"></p>
-    <ol id="r-list" class="results"></ol>
+    <div class="r-body">
+      <ol id="r-list" class="results"></ol>
+      <ul class="missions" id="r-missions"></ul>
+    </div>
     <div class="reward" id="r-reward"></div>
     <div class="rowbtns">
       <button class="btn c3" id="r-retry">↻ Repetir</button>

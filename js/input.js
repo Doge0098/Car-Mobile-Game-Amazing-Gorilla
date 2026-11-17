@@ -1,5 +1,5 @@
 // Entrada: teclado, botones táctiles e inclinación del móvil.
-export const input = { steer: 0, drift: false, brake: false, itemPressed: false, pausePressed: false };
+export const input = { steer: 0, drift: false, brake: false, itemPressed: false, hornPressed: false, pausePressed: false };
 
 const keys = {};
 const touch = { left: false, right: false, drift: false, brake: false };
@@ -10,6 +10,7 @@ export function initInput() {
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code === 'KeyE' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'Enter') input.itemPressed = true;
+    if (e.code === 'KeyH') input.hornPressed = true;
     if (e.code === 'Escape' || e.code === 'KeyP') input.pausePressed = true;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
   });
@@ -78,4 +79,4 @@ export function pollInput(dt) {
   input.brake = !!(keys.ArrowDown || keys.KeyS || touch.brake);
 }
 
-export function consumePresses() { input.itemPressed = false; input.pausePressed = false; }
+export function consumePresses() { input.itemPressed = false; input.hornPressed = false; input.pausePressed = false; }
