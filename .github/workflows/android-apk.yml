@@ -1,0 +1,192 @@
+# Empaqueta el juego como app de Android (APK) con Capacitor.
+# El proyecto Android no está en el repositorio: se genera aquí en cada ejecución.
+# Instrucciones para descargar e instalar el APK: docs/APK.md
+name: Compilar APK Android
+
+on:
+  # Botón "Run workflow" de la pestaña Actions.
+  workflow_dispatch:
+  # Cualquier rama, cuando cambia el juego o el propio empaquetado.
+  push:
+    branches:
+      - '**'
+    paths:
+      - 'index.html'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'css/**'
+      - 'js/**'
+      - 'icons/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'scripts/**'
+      - '.github/workflows/android-apk.yml'
+
+# Lo mínimo para crear o actualizar la release con el APK.
+permissions:
+  contents: write
+
+# Las compilaciones van de una en una. Si llegan varias mientras hay una en marcha,
+# solo espera la última; la que está en marcha no se corta a medio publicar.
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+
+env:
+  APK_NAME: amazing-gorilla-racing.apk
+  RELEASE_TAG: apk-latest
+
+jobs:
+  apk:
+    name: Compilar APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      # Capacitor 8 compila con Java 21.
+      - name: Preparar Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Las descargas de Gradle solo cambian cuando cambia la versión de Capacitor.
+      - name: Recuperar la caché de Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Comprobar el SDK de Android
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$sdk" ] || [ ! -d "$sdk" ]; then
+            echo "::error::Esta máquina no trae el SDK de Android (ANDROID_HOME está vacío)."
+            exit 1
+          fi
+          echo "SDK de Android: $sdk"
+          for dir in platforms build-tools; do
+            echo "$dir: $(find "$sdk/$dir" -mindepth 1 -maxdepth 1 -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ' || true)"
+          done
+          # Con las licencias aceptadas, Gradle descarga solo lo que falte del SDK.
+          for sdkmanager in "$sdk"/cmdline-tools/*/bin/sdkmanager; do
+            if [ -x "$sdkmanager" ]; then
+              yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+              break
+            fi
+          done
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Montar la web (www/)
+        run: node scripts/build-www.mjs
+
+      - name: Crear el proyecto Android
+        run: npx cap add android
+
+      - name: Adaptar el proyecto Android
+        id: patch
+        env:
+          APK_BUILD_NUMBER: ${{ github.run_number }}
+        run: node scripts/patch-android.mjs
+
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      - name: Compilar el APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Recoger el APK
+        id: collect
+        run: |
+          src="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$src" ]; then
+            echo "::error::Gradle terminó pero no dejó el APK en $src"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$src" "dist/$APK_NAME"
+          ls -lh dist
+          sha256sum "dist/$APK_NAME"
+
+      - name: Guardar el APK como artefacto
+        uses: actions/upload-artifact@v7
+        with:
+          name: amazing-gorilla-racing-apk
+          path: dist/${{ env.APK_NAME }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # Release fija "apk-latest": su enlace de descarga es siempre el mismo y cada
+      # ejecución sustituye el APK anterior. Se publica aunque falle el paso del artefacto.
+      - name: Publicar en la release apk-latest
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION_NAME: ${{ steps.patch.outputs.version_name }}
+        run: |
+          repo_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          apk_url="$repo_url/releases/download/$RELEASE_TAG/$APK_NAME"
+          version="${VERSION_NAME:-1.0.$GITHUB_RUN_NUMBER}"
+          title="Amazing Gorilla Racing · APK más reciente (v$version)"
+
+          {
+            echo "APK de Android de **Amazing Gorilla Racing**. Se genera solo y aquí está siempre la compilación más reciente."
+            echo
+            echo "**[⬇️ Descargar $APK_NAME]($apk_url)**"
+            echo
+            echo "- Versión: $version (compilación n.º $GITHUB_RUN_NUMBER)"
+            echo "- Fecha: $(date -u '+%Y-%m-%d %H:%M') UTC"
+            echo "- Rama: $GITHUB_REF_NAME"
+            echo "- Commit: $GITHUB_SHA"
+            echo "- [Registro de la compilación]($repo_url/actions/runs/$GITHUB_RUN_ID)"
+            echo
+            echo "Cómo instalarlo paso a paso: [docs/APK.md]($repo_url/blob/$GITHUB_SHA/docs/APK.md)."
+            echo
+            echo "Es una compilación de pruebas con firma de depuración; no es una versión para Google Play."
+          } > release-notes.md
+
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            # La release ya existe: se cambia el APK y se actualiza el texto.
+            gh release upload "$RELEASE_TAG" "dist/$APK_NAME" --clobber
+            gh release edit "$RELEASE_TAG" --title "$title" --notes-file release-notes.md --prerelease
+            # La etiqueta pasa a apuntar al commit compilado. Es solo informativo: si GitHub
+            # no lo permite, el APK ya está publicado igualmente.
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$RELEASE_TAG" \
+              -f sha="$GITHUB_SHA" -F force=true > /dev/null \
+              || echo "::warning::No se pudo mover la etiqueta $RELEASE_TAG a este commit (el APK sí está publicado)."
+          else
+            # Primera vez: se crea la release con su etiqueta en el commit compilado. Si GitHub
+            # no deja etiquetar ese commit, la etiqueta se crea en la rama principal.
+            gh release create "$RELEASE_TAG" "dist/$APK_NAME" --target "$GITHUB_SHA" \
+              --title "$title" --notes-file release-notes.md --prerelease \
+              || gh release create "$RELEASE_TAG" "dist/$APK_NAME" \
+                --title "$title" --notes-file release-notes.md --prerelease
+          fi
+
+          {
+            echo "## APK listo"
+            echo
+            echo "**[Descargar $APK_NAME]($apk_url)** · versión $version"
+            echo
+            echo "Instrucciones de instalación: [docs/APK.md]($repo_url/blob/$GITHUB_SHA/docs/APK.md)"
+          } >> "$GITHUB_STEP_SUMMARY"

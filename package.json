@@ -1,0 +1,23 @@
+{
+  "name": "amazing-gorilla-racing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Empaquetado Android (Capacitor) de Amazing Gorilla Racing. El juego en sí no necesita compilación.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "android:add": "cap add android",
+    "android:patch": "node scripts/patch-android.mjs",
+    "android:sync": "cap sync android",
+    "android:apk": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
+}

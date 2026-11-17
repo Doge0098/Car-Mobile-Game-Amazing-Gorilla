@@ -1,0 +1,13 @@
+{
+  "appId": "com.amazinggorilla.racing",
+  "appName": "Amazing Gorilla Racing",
+  "webDir": "www",
+  "backgroundColor": "#1a0b3a",
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}
