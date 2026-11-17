@@ -15,6 +15,7 @@ gl_Position = projectionMatrix * mvPosition;
 #include <fog_vertex>
 }`;
 const LIQUID_FS = `uniform float uTime; uniform vec3 uColor; uniform vec3 uColor2; uniform float uMode; uniform float uGlow;
+uniform vec3 uSky; uniform vec3 uSun; uniform vec3 uSunCol; uniform sampler2D uHeight; uniform vec3 uHInfo;
 varying vec3 vW;
 #include <fog_pars_fragment>
 vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p) * 43758.5453); }
@@ -22,32 +23,80 @@ vec2 voro(vec2 x, float t){ vec2 n = floor(x), f = fract(x); float d1 = 8.0, d2 
   for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 g = vec2(float(i), float(j)); vec2 o = hash2(n + g);
     o = 0.5 + 0.4 * sin(t + 6.2831 * o); float d = length(g + o - f); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; } }
   return vec2(d1, d2 - d1); }
+float hash1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash1(i), hash1(i + vec2(1.0, 0.0)), f.x), mix(hash1(i + vec2(0.0, 1.0)), hash1(i + vec2(1.0, 1.0)), f.x), f.y); }
+#define WAVE(dx, dz, fr, sp, am) { float ph = dot(p, vec2(dx, dz)) * fr + uTime * sp; hgt += am * sin(ph); g += vec2(dx, dz) * (fr * am * cos(ph)); }
 void main(){
-  vec2 p = vW.xz; vec3 col;
-  if (uMode < 0.5) {
-    vec2 v = voro(p * 0.07 + vec2(uTime * 0.05, uTime * 0.03), uTime * 0.8);
-    float foam = smoothstep(0.09, 0.0, v.y);
-    float wave = sin(p.x * 0.05 + uTime * 0.7 + sin(p.y * 0.04 + uTime * 0.3) * 2.0) * 0.5 + 0.5;
-    col = mix(uColor, uColor2, wave * 0.5 + v.x * 0.35) + foam * 0.5;
+  vec2 p = vW.xz; vec3 col; float alpha = 1.0;
+  if (uMode < 0.5 || uMode > 2.5) {
+    // agua: olas, reflejo del cielo, destellos de sol, fondo visible en la orilla y espuma
+    vec2 g = vec2(0.0); float hgt = 0.0;
+    WAVE(0.8, 0.6, 0.11, 1.1, 0.5) WAVE(-0.5, 0.86, 0.19, 1.6, 0.3) WAVE(0.2, -0.98, 0.37, 2.3, 0.14) WAVE(-0.92, -0.38, 0.71, 3.1, 0.07)
+    float rip = vnoise(p * 0.9 + uTime * vec2(0.4, 0.25)) - 0.5;
+    vec3 n = normalize(vec3(-g.x - rip * 0.25, 1.0, -g.y + rip * 0.25));
+    vec3 V = normalize(cameraPosition - vW);
+    float th = texture2D(uHeight, (p + uHInfo.x * 0.5) / uHInfo.x * uHInfo.y + uHInfo.z).r;
+    float depth = max(vW.y - th, 0.0);
+    if (!gl_FrontFacing) {
+      float c2 = 0.5 + 0.5 * sin(hgt * 3.0 + rip * 6.0);
+      col = mix(uColor * 0.9, vec3(0.85, 0.97, 1.0), smoothstep(0.55, 1.0, c2) * 0.6); alpha = 0.92;
+    } else {
+      float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+      col = mix(uColor * 1.15 + 0.08, uColor2, smoothstep(0.0, 7.0, depth));
+      col *= 0.9 + 0.16 * hgt;
+      col = mix(col, uSky, clamp(fres, 0.0, 1.0) * 0.45);
+      float spec = pow(max(dot(n, normalize(V + uSun)), 0.0), 140.0);
+      col += uSunCol * spec * 1.6 * uGlow;
+      col += smoothstep(0.3, 0.75, hgt + rip * 0.6) * 0.13;
+      float edge = depth - 0.25 - 0.18 * sin(uTime * 1.4 + p.x * 0.21 + p.y * 0.17);
+      float foam = smoothstep(0.55, 0.0, edge) * (0.55 + 0.45 * vnoise(p * 1.3 + uTime * 0.5));
+      float foam2 = smoothstep(0.14, 0.0, abs(edge - 1.3)) * 0.45;
+      col = mix(col, vec3(1.0), clamp(foam + foam2, 0.0, 1.0) * 0.9);
+      alpha = max(mix(0.5, 0.97, smoothstep(0.0, 2.2, depth)), clamp(foam, 0.0, 1.0));
+      if (uMode > 2.5) { vec2 v = voro(p * 0.5, uTime * 2.0); col += pow(max(0.0, 1.0 - v.x * 3.0), 4.0) * uGlow; }
+    }
   } else if (uMode < 1.5) {
     vec2 v = voro(p * 0.045 + vec2(uTime * 0.02, -uTime * 0.015), uTime * 0.35);
     float crack = smoothstep(0.17, 0.0, v.y);
     float pulse = 0.75 + 0.25 * sin(uTime * 1.7 + v.x * 6.0);
     vec3 crust = mix(uColor2, uColor * 0.5, v.x);
     col = mix(crust, uColor * uGlow * pulse + vec3(0.9, 0.55, 0.08) * crack * uGlow * 0.6, crack * 0.85 + 0.12);
-  } else if (uMode < 2.5) {
+  } else {
     vec2 g = abs(fract(p * 0.05 + vec2(0.0, uTime * 0.12)) - 0.5);
     float line = smoothstep(0.46, 0.5, max(g.x, g.y));
     float pulse = 0.6 + 0.4 * sin(uTime * 2.0 + p.x * 0.02 + p.y * 0.02);
     col = uColor2 + uColor * line * uGlow * pulse;
-  } else {
-    vec2 v = voro(p * 0.06 + uTime * 0.04, uTime * 0.6);
-    float foam = smoothstep(0.07, 0.0, v.y);
-    float spark = pow(max(0.0, 1.0 - voro(p * 0.5, uTime * 2.0).x * 3.0), 4.0);
-    col = mix(uColor, uColor2, v.x) + foam * 0.4 * uGlow + spark * uGlow;
   }
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, alpha);
   #include <fog_fragment>
+  #include <colorspace_fragment>
+}`;
+
+// cielo: degradado, sol con halo y nubes pintadas con sombreado por bandas
+const SKY_FS = `uniform vec3 top; uniform vec3 bottom; uniform float dim; uniform float uTime; uniform vec3 uSun; uniform vec3 uSunCol;
+uniform vec3 uCloud; uniform vec3 uCloudShade; uniform float uCloudAmt; varying vec3 vP;
+float hash1(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash1(i), hash1(i + vec2(1.0, 0.0)), f.x), mix(hash1(i + vec2(0.0, 1.0)), hash1(i + vec2(1.0, 1.0)), f.x), f.y); }
+float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 17.0; a *= 0.5; } return s; }
+void main(){ vec3 d = normalize(vP);
+  float h = clamp(d.y * 1.6 + 0.08, 0.0, 1.0); h = pow(h, 0.7);
+  vec3 col = mix(bottom, top, h);
+  col += bottom * pow(1.0 - clamp(d.y, 0.0, 1.0), 10.0) * 0.18;
+  float sd = max(dot(d, uSun), 0.0);
+  col += uSunCol * (smoothstep(0.9975, 0.9988, sd) * 1.6 + pow(sd, 24.0) * 0.28 + pow(sd, 4.0) * 0.08);
+  #ifdef CLOUDS
+  if (d.y > 0.0) {
+    vec2 uv = d.xz / (d.y + 0.22) * 1.15 + uTime * vec2(0.006, 0.003);
+    float n = fbm(uv * 1.5);
+    float c = smoothstep(0.62 - uCloudAmt * 0.3, 0.78 - uCloudAmt * 0.2, n) * smoothstep(0.0, 0.2, d.y);
+    float lit = clamp((n - fbm(uv * 1.5 + uSun.xz * 0.09)) * 5.0 + 0.62, 0.0, 1.0);
+    lit = floor(lit * 3.0 + 0.5) / 3.0;
+    col = mix(col, mix(uCloudShade, uCloud, lit) + uSunCol * pow(sd, 8.0) * 0.15, c * 0.92);
+  }
+  #endif
+  gl_FragColor = vec4(col * dim, 1.0);
   #include <colorspace_fragment>
 }`;
 
@@ -243,22 +292,37 @@ export function buildTrack(def, opts = {}) {
     if (cz > 0) far += (Math.min(far, th.liquidLevel - (s.deep > s.carve ? 5 : 2.5)) - far) * cz * (1 - smooth(70, 170, d));
     return near + (far - near) * smooth(hw + 17, hw + 85, d);
   };
+  const tSize = 1900, tSeg = quality > 0.7 ? 150 : 100;
+  let heightTex;
   {
-    const size = 1900, seg = quality > 0.7 ? 150 : 100;
-    const g = own(new THREE.PlaneGeometry(size, size, seg, seg));
+    const g = own(new THREE.PlaneGeometry(tSize, tSize, tSeg, tSeg));
     g.rotateX(-Math.PI / 2);
-    const P = g.attributes.position, col = new Float32Array(P.count * 3);
-    const c = new THREE.Color();
+    const P = g.attributes.position, col = new Float32Array(P.count * 3), hdata = new Uint16Array(P.count);
+    for (let i = 0; i < P.count; i++) { const y = terrainH(P.getX(i), P.getZ(i)); P.setY(i, y); hdata[i] = THREE.DataUtils.toHalfFloat(y); }
+    g.computeVertexNormals();
+    // mapa de alturas para que el agua sepa su profundidad (orillas, espuma)
+    heightTex = own(new THREE.DataTexture(hdata, tSeg + 1, tSeg + 1, THREE.RedFormat, THREE.HalfFloatType));
+    heightTex.minFilter = heightTex.magFilter = THREE.LinearFilter; heightTex.needsUpdate = true;
+    const Nn = g.attributes.normal, c = new THREE.Color(), L = th.liquidLevel;
+    const shoreC = new THREE.Color(th.shore ?? 0xe8d79a), rockC = new THREE.Color(th.rock ?? 0x8a8f7a), peakC = new THREE.Color(th.peak ?? th.ground);
     for (let i = 0; i < P.count; i++) {
-      const x = P.getX(i), z = P.getZ(i), y = terrainH(x, z);
-      P.setY(i, y);
+      const x = P.getX(i), z = P.getZ(i), y = P.getY(i), steep = smooth(0.93, 0.74, Nn.getY(i));
       const n = nz(x * 2.3 + 40, z * 2.3 - 17) * 0.5 + 0.5;
-      c.copy(gC1).lerp(gC2, Math.max(0, Math.min(1, n * 0.9 + (y < th.liquidLevel + 1.2 ? 0.5 : 0) + (rand() - 0.5) * 0.25)));
-      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      c.copy(gC1).lerp(gC2, Math.max(0, Math.min(1, n * 0.9 + (rand() - 0.5) * 0.25)));
+      c.lerp(peakC, smooth(th.hills * 0.7, th.hills * 1.25, y) * 0.9).lerp(rockC, steep * 0.75).lerp(shoreC, smooth(2.4, 0.4, y - L));
+      const dk = 1 - smooth(0, 9, L - y) * 0.4;
+      col[i * 3] = c.r * dk; col[i * 3 + 1] = c.g * dk; col[i * 3 + 2] = c.b * dk;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.computeVertexNormals();
-    const m = new THREE.Mesh(g, own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+    // textura de detalle: manchas suaves que rompen el color liso
+    const detail = own(canvasTex(128, 128, (cx, w, h) => {
+      cx.fillStyle = '#f2f2f2'; cx.fillRect(0, 0, w, h);
+      for (let i = 0; i < 60; i++) { const r = 5 + Math.random() * 16, x = Math.random() * w, y = Math.random() * h; cx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,.5)' : 'rgba(0,0,0,.07)';
+        for (const [ox, oy] of [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]]) { cx.beginPath(); cx.arc(x + ox, y + oy, r, 0, 7); cx.fill(); } }
+      for (let i = 0; i < 260; i++) { cx.fillStyle = `rgba(0,0,0,${0.04 + Math.random() * 0.06})`; cx.fillRect(Math.random() * w, Math.random() * h, 2, 2 + Math.random() * 3); }
+    }, true));
+    detail.repeat.set(64, 64);
+    const m = new THREE.Mesh(g, own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, map: detail })));
     m.receiveShadow = true; group.add(m);
   }
   // pilares del puente
@@ -277,48 +341,55 @@ export function buildTrack(def, opts = {}) {
   }
 
   // ---- Agua / lava / líquido animado ----
+  const sunDir = new THREE.Vector3(0.7, 0.62, 0.5).normalize();
   const lc = new THREE.Color(th.liquid), lc2 = lc.clone();
-  if (ex.liquidMode === 1) lc2.set(0x2a0c10); else if (ex.liquidMode === 2) lc2.set(0x0a0624); else lc2.offsetHSL(0.03, 0, -0.16);
+  if (ex.liquidMode === 1) lc2.set(0x2a0c10); else if (ex.liquidMode === 2) lc2.set(0x0a0624); else lc2.offsetHSL(0.02, 0.05, -0.2);
+  const isWater = !ex.liquidMode || ex.liquidMode === 3;
   const liquidMat = own(new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       uTime: { value: 0 }, uColor: { value: lc }, uColor2: { value: lc2 }, uMode: { value: ex.liquidMode || 0 },
       uGlow: { value: th.liquidGlow ? B(1.9) : 1 },
+      uSky: { value: new THREE.Color(th.skyBottom).lerp(new THREE.Color(th.skyTop), 0.35) }, uSun: { value: sunDir }, uSunCol: { value: new THREE.Color(th.sun) },
+      uHeight: { value: null }, uHInfo: { value: new THREE.Vector3(tSize, tSeg / (tSeg + 1), 0.5 / (tSeg + 1)) },
     }]),
-    vertexShader: LIQUID_VS, fragmentShader: LIQUID_FS, fog: true, side: THREE.DoubleSide,
+    vertexShader: LIQUID_VS, fragmentShader: LIQUID_FS, fog: true, side: THREE.DoubleSide, transparent: isWater,
   }));
+  liquidMat.uniforms.uHeight.value = heightTex;
   const liquid = new THREE.Mesh(own(new THREE.CircleGeometry(1150, 40)), liquidMat);
-  liquid.rotation.x = -Math.PI / 2; liquid.position.y = th.liquidLevel;
+  liquid.rotation.x = -Math.PI / 2; liquid.position.y = th.liquidLevel; liquid.renderOrder = -1;
   group.add(liquid);
 
   // ---- Cielo ----
+  const cloudC = new THREE.Color(th.clouds);
   const skyMat = own(new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color(th.skyTop) }, bottom: { value: new THREE.Color(th.skyBottom) }, dim: { value: 1 } },
+    side: THREE.BackSide, depthWrite: false, fog: false, defines: quality > 0.6 ? { CLOUDS: 1 } : {},
+    uniforms: {
+      top: { value: new THREE.Color(th.skyTop) }, bottom: { value: new THREE.Color(th.skyBottom) }, dim: { value: 1 }, uTime: { value: 0 },
+      uSun: { value: sunDir }, uSunCol: { value: new THREE.Color(th.sun).multiplyScalar(B(1.4)) },
+      uCloud: { value: cloudC }, uCloudShade: { value: cloudC.clone().lerp(new THREE.Color(th.skyTop), 0.42) }, uCloudAmt: { value: th.cloudAmt ?? 0.5 },
+    },
     vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform float dim; varying vec3 vP;
-      void main(){ float h = clamp(normalize(vP).y * 1.6 + 0.08, 0.0, 1.0); h = pow(h, 0.7);
-      gl_FragColor = vec4(mix(bottom, top, h) * dim, 1.0);
-      #include <colorspace_fragment>
-      }`,
+    fragmentShader: SKY_FS,
   }));
   const sky = new THREE.Mesh(own(new THREE.SphereGeometry(1500, 24, 14)), skyMat);
   sky.renderOrder = -10; group.add(sky);
-  const sunDir = new THREE.Vector3(0.7, 0.62, 0.5).normalize();
-  const sunMat = own(new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(th.sun).multiplyScalar(B(1.5)), fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
-  const sun = new THREE.Sprite(sunMat); sun.scale.set(400, 400, 1); sun.position.copy(sunDir).multiplyScalar(1100); sky.add(sun);
-  const sun2 = new THREE.Sprite(sunMat); sun2.scale.set(140, 140, 1); sun2.position.copy(sun.position); sky.add(sun2);
+  const sunMat = own(new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(th.sun).multiplyScalar(B(1.2)), fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const sun = new THREE.Sprite(sunMat); sun.scale.set(300, 300, 1); sun.position.copy(sunDir).multiplyScalar(1100); sky.add(sun);
 
-  // nubes
+  // nubes cercanas con volumen (más claras por arriba)
   {
-    const g = own(new THREE.IcosahedronGeometry(1, 1));
-    const mat = own(new THREE.MeshBasicMaterial({ color: th.clouds, fog: false, transparent: true, opacity: 0.9 }));
-    const count = 46, im = new THREE.InstancedMesh(g, mat, count), o = new THREE.Object3D();
+    const g = own(new THREE.IcosahedronGeometry(1, 1)), P = g.attributes.position, cc = new Float32Array(P.count * 3);
+    const shade = cloudC.clone().lerp(new THREE.Color(th.skyTop), 0.45), c = new THREE.Color();
+    for (let i = 0; i < P.count; i++) { c.copy(shade).lerp(cloudC, smooth(-0.5, 0.6, P.getY(i))); cc[i * 3] = c.r; cc[i * 3 + 1] = c.g; cc[i * 3 + 2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(cc, 3));
+    const mat = own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+    const count = 45, im = new THREE.InstancedMesh(g, mat, count), o = new THREE.Object3D();
     let n = 0;
-    for (let i = 0; i < count / 2; i++) {
-      const a = rand() * TAU, r = 420 + rand() * 600, y = 200 + rand() * 160;
-      for (let j = 0; j < 2; j++) {
-        o.position.set(Math.cos(a) * r + j * 38, y - j * 6, Math.sin(a) * r + j * 12);
-        const s = 34 + rand() * 40; o.scale.set(s * 1.7, s * 0.5, s); o.updateMatrix(); im.setMatrixAt(n++, o.matrix);
+    for (let i = 0; i < count / 3; i++) {
+      const a = rand() * TAU, r = 460 + rand() * 560, y = 210 + rand() * 170, s = 30 + rand() * 34;
+      for (let j = 0; j < 3; j++) {
+        o.position.set(Math.cos(a) * r + (j - 1) * s * 1.1, y + (j === 1 ? s * 0.22 : 0), Math.sin(a) * r + (j - 1) * 9);
+        const k = j === 1 ? 1.25 : 0.9; o.scale.set(s * 1.4 * k, s * 0.55 * k, s * k); o.updateMatrix(); im.setMatrixAt(n++, o.matrix);
       }
     }
     im.frustumCulled = false; group.add(im);
@@ -335,20 +406,33 @@ export function buildTrack(def, opts = {}) {
     sky.add(new THREE.Points(g, mat));
   }
   {
-    const parts = [];
-    const base = new THREE.Color(th.mountains), fogC = new THREE.Color(th.fog), c = new THREE.Color();
-    for (let i = 0; i < 26; i++) {
-      const a = i / 26 * TAU + rand() * 0.2, r = 900 + rand() * 160, h = 170 + rand() * 240, w = 170 + rand() * 150;
-      c.copy(base).lerp(fogC, 0.3 + rand() * 0.25);
-      parts.push([new THREE.ConeGeometry(w, h, 5), c.getHex(), [Math.cos(a) * r, h / 2 - 30, Math.sin(a) * r], null, [0, rand() * 3, 0]]);
+    // montañas en tres cordilleras con relieve iluminado: base difuminada, ladera y cumbre
+    const pos = [], col = [];
+    const base = new THREE.Color(th.mountains), fogC = new THREE.Color(th.fog), peak = new THREE.Color(th.peak ?? 0xffffff), c = new THREE.Color(), v = new THREE.Vector3(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    for (const [R, count, hMin, hMax, haze] of [[930, 22, 110, 230, 0.18], [1120, 20, 190, 360, 0.36], [1330, 16, 280, 480, 0.55]]) {
+      for (let i = 0; i < count; i++) {
+        const a = (i + rand() * 0.8) / count * TAU, r = R + rand() * 90, h = hMin + rand() * (hMax - hMin), w = h * (0.75 + rand() * 0.5);
+        const g = new THREE.ConeGeometry(w, h, 6 + Math.floor(rand() * 3), 3).toNonIndexed(), P = g.attributes.position;
+        q.setFromAxisAngle(up, rand() * TAU);
+        for (let k = 0; k < P.count; k++) {
+          v.fromBufferAttribute(P, k); const t = v.y / h + 0.5;
+          v.x *= 1 + (rand() - 0.5) * 0.12; v.z *= 1 + (rand() - 0.5) * 0.12; v.applyQuaternion(q);
+          pos.push(Math.cos(a) * r + v.x, v.y + h / 2 - 34, Math.sin(a) * r + v.z);
+          c.copy(base).lerp(peak, smooth(0.62, 0.8, t)).lerp(fogC, Math.max(haze, smooth(0.3, 0.0, t)));
+          col.push(c.r, c.g, c.b);
+        }
+        g.dispose();
+      }
     }
-    farMesh = new THREE.Mesh(own(merged(parts)), own(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })));
+    const g = own(new THREE.BufferGeometry());
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+    farMesh = new THREE.Mesh(g, own(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false })));
     group.add(farMesh);
   }
 
   // ---- Luces, sombras y niebla ----
-  const hemi = new THREE.HemisphereLight(th.ambientSky, th.ambientGround, 1.25 * th.light);
-  const dir = new THREE.DirectionalLight(th.sun, 1.7 * th.light); dir.position.copy(sunDir);
+  const hemi = new THREE.HemisphereLight(th.ambientSky, th.ambientGround, 1.12 * th.light);
+  const dir = new THREE.DirectionalLight(th.sun, 1.95 * th.light); dir.position.copy(sunDir);
   group.add(hemi, dir, dir.target);
   if (shadows) {
     dir.castShadow = true;
@@ -619,7 +703,7 @@ export function buildTrack(def, opts = {}) {
       uTime.value = t;
       sky.position.set(camPos.x, 0, camPos.z);
       padTex.offset.y = -(t * 2.2) % 1;
-      liquidMat.uniforms.uTime.value = t;
+      liquidMat.uniforms.uTime.value = t; skyMat.uniforms.uTime.value = t;
       liquid.position.set(camPos.x, th.liquidLevel + Math.sin(t * 0.8) * 0.12, camPos.z);
       if (shadows && focus) {
         // se ajusta a una rejilla para que las sombras no tiemblen
