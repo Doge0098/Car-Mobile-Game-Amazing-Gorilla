@@ -105,11 +105,19 @@
     <div class="row"><label>Efectos</label><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
     <div class="row"><label>Gráficos</label><div class="seg" id="set-quality">
       <button data-v="baja">Bajos</button><button data-v="media">Medios</button><button data-v="alta">Altos</button></div></div>
+    <div class="row"><label>Resplandor</label><div class="seg" id="set-bloom"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Sombras reales</label><div class="seg" id="set-shadows"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
+    <div class="row"><label>Vibración</label><div class="seg" id="set-haptics"><button data-v="1">Sí</button><button data-v="0">No</button></div></div>
     <div class="row"><label>Progreso</label><button class="btn small danger" id="set-reset">Borrar partida</button></div>
     <p class="help">
       <b>Cómo jugar:</b> el coche acelera solo. Gira con ◀ ▶ (o inclinando el móvil), mantén <b>DERRAPE</b> en las curvas
       y suéltalo para un mini-turbo (chispas azules → naranjas → moradas). Coge cajas <b>?</b> y pulsa el objeto para usarlo.
       Los plátanos 🍌 te hacen más rápido y sirven para comprar en el garaje.<br>
+      <b>Trucos:</b> pulsa <b>DERRAPE</b> justo en el «¡YA!» para una salida turbo, y otra vez en el aire al saltar una rampa azul
+      para hacer una acrobacia que da impulso al aterrizar.<br>
+      <b>Objetos:</b> 🍌 turbo · 🥥 coco teledirigido · 🍂 cáscara · 🛡️ escudo · 🥁 onda expansiva · 🦍 furia ·
+      ⚡ rayo que encoge a los rivales · 🧲 imán de plátanos · 🛢️ barril que rebota.<br>
+      <b>Gráficos:</b> si el juego va lento, baja el nivel o desactiva resplandor y sombras.<br>
       <b>Teclado:</b> flechas / A-D, Espacio = derrape, E = objeto, P = pausa.<br>
       <b>Instalar:</b> en Android usa “Instalar juego” o el menú del navegador → “Añadir a pantalla de inicio”.
       En iPhone: Compartir → “Añadir a pantalla de inicio”. Después funciona sin conexión.
@@ -130,6 +138,7 @@
   </div>
   <div class="hud-msg" id="hud-msg"></div>
   <div class="hud-warn hidden" id="hud-wrong">↩ ¡Sentido contrario!</div>
+  <div class="hud-hint" id="hud-hint"></div>
   <div class="drift-meter"><div id="drift-fill"></div></div>
   <div class="controls">
     <div class="ctl-left" id="ctl-steer">
@@ -151,6 +160,15 @@
     <button class="btn c1" id="p-resume">▶ Continuar</button>
     <button class="btn c3" id="p-restart">↻ Reiniciar</button>
     <button class="btn c5" id="p-quit">✕ Salir al menú</button>
+  </div>
+</section>
+
+<!-- PODIO -->
+<section id="s-podium" class="screen podium">
+  <h2 id="podium-title">Podio</h2>
+  <div class="podium-foot">
+    <div id="podium-names" class="podium-names"></div>
+    <button class="btn c1" id="podium-next">Continuar ▶</button>
   </div>
 </section>
 

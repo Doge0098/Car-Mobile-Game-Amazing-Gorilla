@@ -11,7 +11,7 @@ const defaults = () => ({
   trophies: {},      // cupId_diff -> 1,2,3
   best: {},          // trackId -> mejor tiempo contrarreloj (s)
   ghosts: {},        // trackId -> array plano [x,z,h,...]
-  settings: { controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta' },
+  settings: { controls: 'buttons', music: 0.6, sfx: 0.8, quality: 'alta', bloom: true, shadows: true, haptics: true },
 });
 
 export let save = defaults();

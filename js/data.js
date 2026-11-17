@@ -1,17 +1,17 @@
 // Datos del juego: personajes, coches, mapas, copas y power-ups.
 
 export const CHARACTERS = [
-  { id: 'bongo', name: 'Bongo', fur: 0x5a3a26, skin: 0xc79a7a, acc: 'cap', accColor: 0xff3b3b,
+  { id: 'bongo', voice: 1.0, name: 'Bongo', fur: 0x5a3a26, skin: 0xc79a7a, acc: 'cap', accColor: 0xff3b3b,
     stats: { speed: 3, accel: 3, handling: 3 }, price: 0, desc: 'Equilibrado y siempre sonriente.' },
-  { id: 'tita', name: 'Tita', fur: 0x33303d, skin: 0xb98f9c, acc: 'bow', accColor: 0xff4fd8,
+  { id: 'tita', voice: 1.28, name: 'Tita', fur: 0x33303d, skin: 0xb98f9c, acc: 'bow', accColor: 0xff4fd8,
     stats: { speed: 2, accel: 4, handling: 4 }, price: 0, desc: 'Ágil y rapidísima al arrancar.' },
-  { id: 'rocco', name: 'Rocco', fur: 0x8a4b1c, skin: 0xd9a066, acc: 'glasses', accColor: 0x111111,
+  { id: 'rocco', voice: 0.74, name: 'Rocco', fur: 0x8a4b1c, skin: 0xd9a066, acc: 'glasses', accColor: 0x111111,
     stats: { speed: 4, accel: 2, handling: 3 }, price: 150, desc: 'Grandullón con mucha punta.' },
-  { id: 'nube', name: 'Nube', fur: 0xf2f2f7, skin: 0xffc9b0, acc: 'headphones', accColor: 0x29d3ff,
+  { id: 'nube', voice: 1.12, name: 'Nube', fur: 0xf2f2f7, skin: 0xffc9b0, acc: 'headphones', accColor: 0x29d3ff,
     stats: { speed: 3, accel: 4, handling: 4 }, price: 300, desc: 'Gorila blanco amante de la música.' },
-  { id: 'zafiro', name: 'Zafiro', fur: 0x2456d8, skin: 0x9fd0ff, acc: 'mohawk', accColor: 0xffe600,
+  { id: 'zafiro', voice: 0.94, name: 'Zafiro', fur: 0x2456d8, skin: 0x9fd0ff, acc: 'mohawk', accColor: 0xffe600,
     stats: { speed: 4, accel: 3, handling: 5 }, price: 550, desc: 'Azul eléctrico, derrapa como nadie.' },
-  { id: 'mambo', name: 'Rey Mambo', fur: 0xd99a1c, skin: 0xffe2a8, acc: 'crown', accColor: 0xffd700,
+  { id: 'mambo', voice: 0.8, name: 'Rey Mambo', fur: 0xd99a1c, skin: 0xffe2a8, acc: 'crown', accColor: 0xffd700,
     stats: { speed: 5, accel: 4, handling: 3 }, price: 900, desc: 'El rey dorado de la selva.' },
 ];
 
@@ -37,6 +37,9 @@ export const ITEMS = {
   shield: { name: 'Escudo Hoja', icon: '🛡️', color: '#35e08a' },
   drum: { name: 'Golpe de Pecho', icon: '🥁', color: '#ff5a3c' },
   fury: { name: 'Furia Gorila', icon: '🦍', color: '#c04dff' },
+  bolt: { name: 'Rayo', icon: '⚡', color: '#ffe600' },
+  magnet: { name: 'Imán de Plátanos', icon: '🧲', color: '#ff3b4a' },
+  barrel: { name: 'Barril Rodante', icon: '🛢️', color: '#a8643a' },
 };
 
 // Cada mapa: forma (curva polar => nunca se cruza), tema visual y música.
@@ -52,7 +55,9 @@ export const TRACKS = [
       props: [['tree', 150], ['palm', 60], ['rock', 40], ['flower', 110], ['mushroom', 30]],
       fx: 'fireflies', fxColor: 0xf6ff8a, hills: 26, mountains: 0x2a9d6a, clouds: 0xffffff,
     },
-    music: { tempo: 132, root: 57, scale: 'major', prog: [0, 3, 4, 0], seed: 3 },
+    music: { tempo: 132, root: 57, scale: 'major', prog: [0, 3, 4, 0], seed: 3 , style: 'jungle' },
+    elev: [[1, 10], [3, 8]], tunnel: [0.61, 0.68], bridge: [0.355, 0.425], ramps: [0.25, 0.87],
+    extras: { weather: 'rain', hazard: 'barrel', life: 'birds', liquidMode: 0, lamp: 0xff9a2a, deck: 0x9a6a3a, tunnelCol: 0x6f7f6a, tunnelGlow: 0xffd98a, puddle: 0x8fdcff, mark: 0x15151c },
   },
   {
     id: 'playa', name: 'Playa Coco', cup: 0, R: 315, width: 16,
@@ -65,7 +70,9 @@ export const TRACKS = [
       props: [['palm', 150], ['rock', 40], ['umbrella', 50], ['flower', 40], ['shell', 60]],
       fx: 'bubbles', fxColor: 0xffffff, hills: 16, mountains: 0x35c2a8, clouds: 0xffffff,
     },
-    music: { tempo: 124, root: 60, scale: 'major', prog: [0, 4, 5, 3], seed: 8 },
+    music: { tempo: 124, root: 60, scale: 'major', prog: [0, 4, 5, 3], seed: 8 , style: 'beach' },
+    elev: [[2, 8], [5, 4]], tunnel: [0.84, 0.9], bridge: [0.105, 0.175], ramps: [0.25, 0.635],
+    extras: { weather: 'none', hazard: 'crab', life: 'birds', liquidMode: 0, lamp: 0xff5ec4, deck: 0xc79a5a, tunnelCol: 0xd9b98a, tunnelGlow: 0xfff0b0, puddle: 0x9ff0ff, mark: 0x2a2220 },
   },
   {
     id: 'volcan', name: 'Volcán Furioso', cup: 0, R: 301, width: 14.5,
@@ -78,7 +85,9 @@ export const TRACKS = [
       props: [['lavarock', 130], ['deadtree', 70], ['crystal', 60], ['rock', 70]],
       fx: 'embers', fxColor: 0xffa23a, hills: 34, mountains: 0x4a1a2e, clouds: 0x7a3a4a, propGlow: 0xff5a1a,
     },
-    music: { tempo: 140, root: 52, scale: 'minor', prog: [0, 5, 3, 4], seed: 5 },
+    music: { tempo: 140, root: 52, scale: 'minor', prog: [0, 5, 3, 4], seed: 5 , style: 'volcano' },
+    elev: [[1, 18], [4, 8]], tunnel: [0.355, 0.43], bridge: [0.6, 0.68], ramps: [0.135, 0.87],
+    extras: { weather: 'ash', hazard: 'geyser', life: null, liquidMode: 1, lamp: 0xff6a1a, deck: 0x4a3a44, tunnelCol: 0x3a2630, tunnelGlow: 0xff7a1a, puddle: null, mark: 0x0c0a0e },
   },
   {
     id: 'hielo', name: 'Cumbre Helada', cup: 1, R: 311, width: 15,
@@ -91,7 +100,9 @@ export const TRACKS = [
       props: [['pine', 170], ['icecrystal', 70], ['snowman', 30], ['rock', 40]],
       fx: 'snow', fxColor: 0xffffff, hills: 38, mountains: 0xb8dcff, clouds: 0xffffff,
     },
-    music: { tempo: 128, root: 62, scale: 'major', prog: [0, 5, 3, 4], seed: 12 },
+    music: { tempo: 128, root: 62, scale: 'major', prog: [0, 5, 3, 4], seed: 12 , style: 'ice' },
+    elev: [[2, 14], [3, 10]], tunnel: [0.105, 0.175], bridge: [0.84, 0.9], ramps: [0.38, 0.635],
+    extras: { weather: 'blizzard', hazard: 'penguin', life: null, liquidMode: 0, lamp: 0x7fe0ff, deck: 0xbfe6ff, tunnelCol: 0x9fd6ff, tunnelGlow: 0xcff4ff, puddle: 0xe6f8ff, mark: 0x26304a },
   },
   {
     id: 'neon', name: 'Ciudad Neón', cup: 1, R: 318, width: 15,
@@ -105,7 +116,9 @@ export const TRACKS = [
       fx: 'fireflies', fxColor: 0xff5ef0, hills: 6, mountains: 0x2a0f5a, clouds: 0x5a2a9a, stars: true,
       propGlow: 0xff2fd0, neon: true,
     },
-    music: { tempo: 138, root: 55, scale: 'minor', prog: [0, 3, 5, 4], seed: 21 },
+    music: { tempo: 138, root: 55, scale: 'minor', prog: [0, 3, 5, 4], seed: 21 , style: 'neon' },
+    elev: [[3, 10], [1, 6]], tunnel: [0.6, 0.69], bridge: [0.355, 0.425], ramps: [0.14, 0.25, 0.87],
+    extras: { weather: 'none', hazard: 'drone', life: 'beams', liquidMode: 2, lamp: 0x00f0ff, deck: 0x2a1a6a, tunnelCol: 0x1a1240, tunnelGlow: 0xff2fd0, puddle: null, mark: 0x00c8e0 },
   },
   {
     id: 'arcoiris', name: 'Templo Arcoíris', cup: 1, R: 314, width: 15.5,
@@ -113,13 +126,15 @@ export const TRACKS = [
     theme: {
       skyTop: 0x2a1a8a, skyBottom: 0xff8ad8, fog: 0xffa0e0, fogNear: 140, fogFar: 540,
       ground: 0xffc4ec, ground2: 0xc9a0ff, liquid: 0x8a5cff, liquidLevel: -1.8, liquidGlow: 1,
-      road: '#ffffff', line: '#ffffff', curbA: 0xffffff, curbB: 0xffe600,
+      road: '#ffffff', line: '#7a4cff', curbA: 0xffffff, curbB: 0xffe600,
       sun: 0xffffff, light: 1.2, ambientSky: 0xffd8ff, ambientGround: 0xc090ff,
       props: [['candytree', 120], ['crystal', 90], ['mushroom', 70], ['column', 50]],
       fx: 'stars', fxColor: 0xffffff, hills: 22, mountains: 0x9a6aff, clouds: 0xffffff, stars: true,
       rainbow: true, propGlow: 0xffffff,
     },
-    music: { tempo: 144, root: 59, scale: 'major', prog: [0, 4, 5, 3], seed: 30 },
+    music: { tempo: 144, root: 59, scale: 'major', prog: [0, 4, 5, 3], seed: 30 , style: 'temple' },
+    elev: [[2, 16], [5, 7]], tunnel: [0.105, 0.165], bridge: [0.6, 0.68], ramps: [0.25, 0.39, 0.87],
+    extras: { weather: 'stars', hazard: 'star', life: null, liquidMode: 3, lamp: 0xffe600, deck: 0xffffff, tunnelCol: 0xd0a8ff, tunnelGlow: 0xffffff, puddle: null, mark: 0xffffff },
   },
 ];
 
@@ -139,7 +154,8 @@ export const RACE_REWARD = [60, 40, 30, 20, 15, 10];
 export const LAPS = 3;
 export const RACERS = 6;
 
-export const MENU_MUSIC = { tempo: 116, root: 57, scale: 'major', prog: [0, 5, 3, 4], seed: 1 };
+export const MENU_MUSIC = { tempo: 116, root: 57, scale: 'major', prog: [0, 5, 3, 4], seed: 1, style: 'menu' };
+export const PODIUM_MUSIC = { tempo: 126, root: 60, scale: 'major', prog: [0, 3, 4, 0], seed: 44, style: 'podium' };
 
 export function trackById(id) { return TRACKS.find(t => t.id === id); }
 export function charById(id) { return CHARACTERS.find(c => c.id === id) || CHARACTERS[0]; }

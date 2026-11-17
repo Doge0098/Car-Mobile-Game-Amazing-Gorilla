@@ -138,6 +138,7 @@ html, body {
 @keyframes spin { to { transform: rotate(11deg); } }
 #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
 #flash.go { animation: flash .45s ease-out; } @keyframes flash { 0% { opacity: .75; } 100% { opacity: 0; } }
+#flash.soft { animation: flashS .5s ease-out; } @keyframes flashS { 0% { opacity: .4; } 30% { opacity: .1; } 45% { opacity: .35; } 100% { opacity: 0; } }
 
 /* ---------- Modales ---------- */
 .box { background: linear-gradient(170deg, #4a22b8, #8a1f9a); border: 4px solid var(--ink); border-radius: 26px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; min-width: min(300px, 86vw); box-shadow: 0 9px 0 rgba(0, 0, 0, .45); max-height: 96vh; }
@@ -157,3 +158,22 @@ html, body {
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #loading { position: fixed; inset: 0; background: linear-gradient(160deg, #3a12a0, #b02a9a); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; font-size: 20px; font-style: italic; }
 .spinner { font-size: 64px; animation: rot 0.8s linear infinite; } @keyframes rot { to { transform: rotate(360deg); } }
+
+/* ---------- Pista de ayuda en carrera ---------- */
+.hud-hint { left: 50%; bottom: calc(44px + var(--sa-b)); transform: translateX(-50%); max-width: min(72vw, 460px); text-align: center; background: rgba(16, 6, 46, .72); border: 2px solid var(--cyan); border-radius: 14px; padding: 6px 14px; font-size: clamp(12px, 2.6vmin, 17px); opacity: 0; transition: opacity .3s; }
+.hud-hint.show { opacity: 1; }
+@media (orientation: portrait) { .hud-hint { bottom: calc(clamp(150px, 34vmin, 200px) + var(--sa-b)); } }
+.seg.off { opacity: .4; pointer-events: none; }
+
+/* ---------- Podio ---------- */
+.podium { justify-content: space-between; align-items: center; pointer-events: auto; }
+.podium h2 { margin: 2px 0 0; font-style: italic; font-size: clamp(26px, 7vmin, 52px); color: var(--yellow); -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; text-shadow: 0 5px 0 rgba(0, 0, 0, .35); animation: bump .6s; }
+.podium-foot { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.podium-names { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; }
+.podium-names span { background: rgba(16, 6, 46, .72); border: 2px solid #fff; border-radius: 999px; padding: 4px 14px; font-size: clamp(13px, 3vmin, 18px); }
+.podium-names span.me { background: var(--yellow); color: var(--ink); border-color: var(--ink); }
+.podium-names b { font-style: italic; }
+@media (orientation: portrait) {
+  .ctl-right { flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
+  .ctl.item { margin: 0; }
+}

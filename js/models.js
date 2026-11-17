@@ -42,18 +42,33 @@ function add(parent, geometry, material, pos, scale, rot) {
 }
 
 // ---------------- GORILA ----------------
-export function makeGorilla(ch, override) {
+const FACES = {
+  neutral: [0, 0, 1.0, 0.28, 0, 1],
+  happy: [-0.12, 0.02, 1.3, 0.95, 1, 1],
+  angry: [0.5, -0.025, 1.25, 0.5, 1, 0.8],
+  scared: [-0.42, 0.045, 0.75, 1.2, 0, 1.3],
+  sad: [-0.45, 0, 0.9, 0.22, 0, 0.72],
+  focus: [0.28, -0.015, 0.8, 0.22, 0, 0.88],
+  dizzy: [-0.2, 0.02, 0.85, 0.85, 0, 1.15],
+}; // [ángulo ceja, altura ceja, ancho boca, apertura boca, dientes, apertura ojo]
+
+export function makeGorilla(ch, override, standing = false) {
   const M = c => override || toon(c);
-  const fur = M(ch.fur), skin = M(ch.skin), dark = M(0x16161c), white = M(0xffffff), accM = M(ch.accColor);
+  const fur = M(ch.fur), skin = M(ch.skin), dark = M(0x16161c), white = M(0xffffff), accM = M(ch.accColor), inMouth = M(0x5a1420);
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
 
   add(body, sphere(0.62), fur, [0, 0.75, 0], [1.15, 1.1, 0.95]);
   add(body, sphere(0.45), skin, [0, 0.84, 0.34], [1.1, 0.9, 0.5]);
-  // piernas
+  // piernas (sentado o de pie)
   for (const s of [-1, 1]) {
-    add(body, capsule(0.19, 0.5), fur, [0.32 * s, 0.26, 0.45], null, [1.35, 0, 0]);
-    add(body, sphere(0.2), skin, [0.32 * s, 0.2, 0.86], [1, 0.8, 1.3]);
+    if (standing) {
+      add(body, capsule(0.19, 0.5), fur, [0.3 * s, -0.1, 0]);
+      add(body, sphere(0.2), skin, [0.3 * s, -0.62, 0.12], [1, 0.7, 1.4]);
+    } else {
+      add(body, capsule(0.19, 0.5), fur, [0.32 * s, 0.26, 0.45], null, [1.35, 0, 0]);
+      add(body, sphere(0.2), skin, [0.32 * s, 0.2, 0.86], [1, 0.8, 1.3]);
+    }
   }
   // cabeza
   const head = new THREE.Group(); head.position.set(0, 1.55, 0.05); body.add(head);
@@ -61,14 +76,18 @@ export function makeGorilla(ch, override) {
   add(head, sphere(0.3), fur, [0, 0.3, -0.06], [0.9, 0.95, 1.05]);
   add(head, sphere(0.36), skin, [0, -0.02, 0.2], [1, 0.95, 0.72]);
   add(head, sphere(0.24), skin, [0, -0.17, 0.36], [1.2, 0.82, 0.85]);
-  add(head, box(0.24, 0.03, 0.03), dark, [0, -0.23, 0.555]);
   add(head, box(0.62, 0.11, 0.2), fur, [0, 0.14, 0.36]);
+  const eyes = [], pupils = [], brows = [];
   for (const s of [-1, 1]) {
     add(head, sphere(0.03, 6), dark, [0.06 * s, -0.11, 0.565]);
-    add(head, sphere(0.09, 8), white, [0.15 * s, 0.02, 0.43]);
-    add(head, sphere(0.048, 8), dark, [0.15 * s, 0.02, 0.5]);
+    eyes.push(add(head, sphere(0.09, 8), white, [0.15 * s, 0.02, 0.43]));
+    pupils.push(add(head, sphere(0.048, 8), dark, [0.15 * s, 0.02, 0.5]));
+    brows.push(add(head, box(0.21, 0.05, 0.05), dark, [0.15 * s, 0.135, 0.475]));
     add(head, sphere(0.12, 8), skin, [0.46 * s, 0.02, -0.02], [0.6, 1, 1]);
   }
+  const mouth = new THREE.Group(); mouth.position.set(0, -0.235, 0.535); head.add(mouth);
+  add(mouth, sphere(0.1, 8), inMouth, null, [1, 1, 0.4]);
+  const teeth = add(mouth, box(0.17, 0.035, 0.04), white, [0, 0.05, 0.03]);
   // accesorios
   switch (ch.acc) {
     case 'cap':
@@ -80,8 +99,8 @@ export function makeGorilla(ch, override) {
       add(head, sphere(0.08, 8), accM, [0, 0.56, 0]);
       break;
     case 'glasses':
-      for (const s of [-1, 1]) add(head, box(0.22, 0.14, 0.05), accM, [0.15 * s, 0.03, 0.52]);
-      add(head, box(0.9, 0.04, 0.04), accM, [0, 0.06, 0.48]);
+      for (const s of [-1, 1]) add(head, box(0.22, 0.14, 0.05), accM, [0.15 * s, 0.03, 0.535]);
+      add(head, box(0.9, 0.04, 0.04), accM, [0, 0.06, 0.5]);
       break;
     case 'headphones':
       add(head, torus(0.5, 0.05), accM, [0, 0.06, 0], [1, 1, 1], [0, 0, 0]);
@@ -108,43 +127,71 @@ export function makeGorilla(ch, override) {
     add(p, sphere(0.2, 8), skin, [0, -0.93, 0]);
     body.add(p); arms.push(p);
   }
-  g.userData = { body, head, armL: arms[1], armR: arms[0] };
+  g.userData = { body, head, armL: arms[1], armR: arms[0], eyes, pupils, brows, mouth, teeth, baseY: standing ? 0.85 : 0, face: FACES.neutral.slice(), blink: Math.random() * 4 };
   return g;
 }
 
-// mode: drive | pound | cheer | dizzy | sad
-export function animateGorilla(g, t, steer = 0, mode = 'drive', speedK = 0) {
-  const u = g.userData;
-  const { body, head, armL, armR } = u;
-  let ax = -1.13, ay = 0.42, lz = 0, rz = 0, lx = 0, rx = 0;
-  body.position.y = Math.sin(t * 14) * 0.012 * (0.3 + speedK);
+// o: { steer, mode, speedK, face, look, throwK, taunt, dt }
+// mode: drive | pound | cheer | dizzy | sad | trick | idle | dance | clap | wave
+export function animateGorilla(g, t, o = {}) {
+  const u = g.userData, { body, head, armL, armR } = u;
+  const steer = o.steer || 0, mode = o.mode || 'drive', dt = o.dt || 0.016;
+  // --- cara ---
+  const target = FACES[o.face] || FACES.neutral, f = u.face, k = Math.min(1, dt * 12);
+  for (let i = 0; i < 6; i++) f[i] += (target[i] - f[i]) * k;
+  u.blink -= dt; if (u.blink < -0.12) u.blink = 2 + Math.random() * 3.5;
+  const eyeY = u.blink < 0 ? 0.12 : f[5];
+  for (let i = 0; i < 2; i++) {
+    const s = i ? 1 : -1;
+    u.brows[i].rotation.z = f[0] * s; u.brows[i].position.y = 0.135 + f[1];
+    u.eyes[i].scale.y = eyeY; u.pupils[i].scale.y = Math.min(1, eyeY);
+    u.pupils[i].position.x = 0.15 * s + (mode === 'dizzy' ? Math.cos(t * 14) * 0.03 : Math.max(-0.035, Math.min(0.035, -steer * 0.03 + (o.look || 0) * 0.02)));
+    u.pupils[i].position.y = 0.02 + (mode === 'dizzy' ? Math.sin(t * 14) * 0.03 : 0);
+  }
+  u.mouth.scale.set(f[2], f[3], 1); u.teeth.visible = f[4] > 0.5;
+
+  // --- cuerpo ---
+  const ax = -1.13, ay = 0.42;
+  body.scale.setScalar(1);
+  body.position.y = u.baseY + Math.sin(t * 14) * 0.012 * (0.3 + (o.speedK || 0));
   body.rotation.set(0, 0, -steer * 0.14);
-  head.rotation.set(0, -steer * 0.35, -steer * 0.1);
+  head.rotation.set(0, -steer * 0.35 + (o.look || 0), -steer * 0.1);
   if (mode === 'drive') {
-    lx = steer * 0.35; rx = -steer * 0.35;
-    armL.rotation.set(ax + lx, -ay, lz); armR.rotation.set(ax + rx, ay, rz);
+    armL.rotation.set(ax + steer * 0.35, -ay, 0); armR.rotation.set(ax - steer * 0.35, ay, 0);
+    if (o.taunt) { armL.rotation.set(-2.75, 0, -0.25 + Math.sin(t * 20) * 0.35); head.rotation.x = -0.2; }
+    if (o.throwK > 0) { const q = Math.min(1, o.throwK); armR.rotation.set(-3.1 + q * 2.3, 0.15, 0.1); body.rotation.x = -0.15 + q * 0.3; }
   } else if (mode === 'pound') {
-    const k = Math.sin(t * 26);
-    armL.rotation.set(-0.9 + k * 0.5, -1.25, 0.2);
-    armR.rotation.set(-0.9 - k * 0.5, 1.25, -0.2);
+    const q = Math.sin(t * 26);
+    armL.rotation.set(-0.9 + q * 0.5, -1.25, 0.2); armR.rotation.set(-0.9 - q * 0.5, 1.25, -0.2);
     head.rotation.x = -0.35 + Math.sin(t * 13) * 0.08;
     body.scale.setScalar(1.06 + Math.sin(t * 26) * 0.02);
-    return;
-  } else if (mode === 'cheer') {
-    const k = Math.sin(t * 9);
-    armL.rotation.set(-2.9, 0, -0.35 + k * 0.3);
-    armR.rotation.set(-2.9, 0, 0.35 - k * 0.3);
-    body.position.y = Math.abs(Math.sin(t * 9)) * 0.14;
+  } else if (mode === 'cheer' || mode === 'trick') {
+    const q = Math.sin(t * 9);
+    armL.rotation.set(-2.9, 0, -0.35 + q * 0.3); armR.rotation.set(-2.9, 0, 0.35 - q * 0.3);
+    body.position.y += Math.abs(Math.sin(t * 9)) * 0.14;
     head.rotation.set(-0.25, Math.sin(t * 4.5) * 0.3, 0);
   } else if (mode === 'dizzy') {
-    armL.rotation.set(-2.2, 0, -0.9 + Math.sin(t * 20) * 0.3);
-    armR.rotation.set(-2.2, 0, 0.9 - Math.sin(t * 20) * 0.3);
+    armL.rotation.set(-2.2, 0, -0.9 + Math.sin(t * 20) * 0.3); armR.rotation.set(-2.2, 0, 0.9 - Math.sin(t * 20) * 0.3);
     head.rotation.set(Math.sin(t * 9) * 0.3, Math.cos(t * 9) * 0.5, 0);
   } else if (mode === 'sad') {
-    armL.rotation.set(ax, -ay, 0); armR.rotation.set(ax, ay, 0);
+    if (u.baseY) { armL.rotation.set(0.1, 0, -0.12); armR.rotation.set(0.1, 0, 0.12); } else { armL.rotation.set(ax, -ay, 0); armR.rotation.set(ax, ay, 0); }
     head.rotation.set(0.45, Math.sin(t * 2) * 0.25, 0);
+  } else if (mode === 'idle') {
+    armL.rotation.set(Math.sin(t * 2) * 0.08, 0, -0.14); armR.rotation.set(-Math.sin(t * 2) * 0.08, 0, 0.14);
+    head.rotation.set(0, Math.sin(t * 1.3) * 0.25, 0);
+  } else if (mode === 'dance') {
+    const q = Math.sin(t * 8);
+    armL.rotation.set(-2.6 + q * 0.5, 0, -0.5 - q * 0.3); armR.rotation.set(-2.6 - q * 0.5, 0, 0.5 - q * 0.3);
+    body.position.y += Math.abs(Math.sin(t * 8)) * 0.35; body.rotation.set(0, Math.sin(t * 4) * 0.6, q * 0.12);
+    head.rotation.set(-0.2, 0, q * 0.2);
+  } else if (mode === 'clap') {
+    const q = Math.abs(Math.sin(t * 11));
+    armL.rotation.set(-1.25, -0.2 - q * 0.75, 0); armR.rotation.set(-1.25, 0.2 + q * 0.75, 0);
+    body.position.y += Math.abs(Math.sin(t * 5.5)) * 0.08; head.rotation.set(-0.1, Math.sin(t * 2) * 0.2, 0);
+  } else if (mode === 'wave') {
+    armL.rotation.set(-2.8, 0, -0.3 + Math.sin(t * 10) * 0.4); armR.rotation.set(0.05, 0, 0.14);
+    head.rotation.set(-0.05, Math.sin(t * 2.4) * 0.2, 0.08);
   }
-  body.scale.setScalar(1);
 }
 
 // ---------------- COCHE ----------------
@@ -382,15 +429,77 @@ export function glowTex() {
   return _glowTex;
 }
 
-let _shadowTex = null;
+let _shadowTex = null, _shadowMat = null;
 export function blobShadow(size = 3.4) {
   if (!_shadowTex) _shadowTex = canvasTex(64, 64, (c) => {
     const g = c.createRadialGradient(32, 32, 4, 32, 32, 32);
     g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(0, 0, 64, 64);
   });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size * 1.35),
-    new THREE.MeshBasicMaterial({ map: _shadowTex, transparent: true, depthWrite: false, fog: false }));
+  if (!_shadowMat) _shadowMat = new THREE.MeshBasicMaterial({ map: _shadowTex, transparent: true, depthWrite: false, fog: false });
+  const m = new THREE.Mesh(geo('shadow' + size, () => new THREE.PlaneGeometry(size, size * 1.35)), _shadowMat);
   m.rotation.x = -Math.PI / 2; m.position.y = 0.06; m.renderOrder = 2;
   return m;
+}
+
+// ---------------- OBSTÁCULOS VIVOS ----------------
+const HAZARD_GEO = {
+  barrel: () => merged([
+    [C(1.05, 1.05, 2.1, 12), 0xa8643a, null, null, [PI / 2, 0, 0]],
+    [C(1.1, 1.1, 0.2, 12), 0x3a2a22, [0, 0, 0.65], null, [PI / 2, 0, 0]], [C(1.1, 1.1, 0.2, 12), 0x3a2a22, [0, 0, -0.65], null, [PI / 2, 0, 0]],
+    [C(0.5, 0.5, 2.14, 8), 0xffd21f, null, null, [PI / 2, 0, 0]],
+  ]),
+  crab: () => {
+    const p = [[ico(0.9, 1), 0xff4a3a, [0, 0.65, 0], [1.35, 0.55, 0.95]]];
+    for (const s of [-1, 1]) {
+      p.push([ico(0.45, 1), 0xff7a4a, [1.55 * s, 0.85, 0.55], [1, 0.8, 1.2]], [C(0.07, 0.07, 0.5, 5), 0xff4a3a, [0.35 * s, 1.15, 0.35]],
+        [ico(0.17, 0), 0xffffff, [0.35 * s, 1.45, 0.35]], [ico(0.08, 0), 0x111111, [0.35 * s, 1.47, 0.5]]);
+      for (let i = 0; i < 3; i++) p.push([B(0.7, 0.12, 0.14), 0xd93a2a, [1.25 * s, 0.35, -0.5 + i * 0.4], null, [0, 0, -0.5 * s]]);
+    }
+    return merged(p);
+  },
+  penguin: () => merged([
+    [ico(0.8, 1), 0x1c2238, [0, 1.0, 0], [0.9, 1.3, 0.9]], [ico(0.62, 1), 0xffffff, [0, 0.9, 0.3], [0.85, 1.25, 0.6]],
+    [ico(0.5, 1), 0x1c2238, [0, 2.1, 0]], [K(0.16, 0.45, 6), 0xff9a1a, [0, 2.05, 0.55], null, [PI / 2, 0, 0]],
+    [ico(0.1, 0), 0xffffff, [0.2, 2.25, 0.4]], [ico(0.1, 0), 0xffffff, [-0.2, 2.25, 0.4]],
+    [B(0.16, 0.9, 0.5), 0x1c2238, [0.75, 1.1, 0], null, [0, 0, 0.35]], [B(0.16, 0.9, 0.5), 0x1c2238, [-0.75, 1.1, 0], null, [0, 0, -0.35]],
+    [B(0.4, 0.12, 0.6), 0xff9a1a, [0.3, 0.06, 0.25]], [B(0.4, 0.12, 0.6), 0xff9a1a, [-0.3, 0.06, 0.25]],
+  ]),
+  drone: () => merged([
+    [B(1.5, 0.9, 1.5), 0x6a4cff, [0, 1.4, 0]], [B(1.1, 0.3, 0.1), 0x16161c, [0, 1.5, 0.76]],
+    [ico(0.2, 0), 0x22e6ff, [0.25, 1.5, 0.8]], [ico(0.2, 0), 0x22e6ff, [-0.25, 1.5, 0.8]],
+    [C(0.04, 0.04, 0.7, 4), 0xdddddd, [0, 2.2, 0]], [ico(0.14, 0), 0xff2fd0, [0, 2.6, 0]],
+    [C(0.6, 0.6, 0.06, 10), 0xff2fd0, [0.9, 1.95, 0.9]], [C(0.6, 0.6, 0.06, 10), 0xff2fd0, [-0.9, 1.95, 0.9]],
+    [C(0.6, 0.6, 0.06, 10), 0xff2fd0, [0.9, 1.95, -0.9]], [C(0.6, 0.6, 0.06, 10), 0xff2fd0, [-0.9, 1.95, -0.9]],
+  ]),
+  star: () => {
+    const p = [[ico(0.85, 1), 0xffe600, [0, 1.1, 0], [1, 1, 0.7]], [ico(0.12, 0), 0x16161c, [0.25, 1.25, 0.56]], [ico(0.12, 0), 0x16161c, [-0.25, 1.25, 0.56]]];
+    for (let i = 0; i < 5; i++) { const a = i / 5 * PI * 2 + PI / 2; p.push([K(0.42, 1.0, 5), 0xffc400, [Math.cos(a) * 1.05, 1.1 + Math.sin(a) * 1.05, 0], [1, 1, 0.6], [0, 0, a - PI / 2]]); }
+    return merged(p);
+  },
+  geyser: () => {
+    const p = [];
+    for (let i = 0; i < 9; i++) { const a = i / 9 * PI * 2; p.push([new THREE.DodecahedronGeometry(0.62, 0), i % 2 ? 0x3a2630 : 0x2a1a24, [Math.cos(a) * 1.9, 0.25, Math.sin(a) * 1.9], [1, 0.8 + (i % 3) * 0.3, 1]]); }
+    return merged(p);
+  },
+  meteor: () => merged([[new THREE.DodecahedronGeometry(1.5, 0), 0x2a1a24, null], [new THREE.OctahedronGeometry(0.8, 0), 0xff7a1a, [0.8, 0.6, 0.5]], [new THREE.OctahedronGeometry(0.7, 0), 0xffc21f, [-0.7, -0.5, 0.6]]]),
+};
+const hazGeo = new Map();
+let hazMat = null;
+export function makeHazard(type) {
+  if (!hazGeo.has(type)) hazGeo.set(type, HAZARD_GEO[type]());
+  if (!hazMat) hazMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  return new THREE.Mesh(hazGeo.get(type), hazMat);
+}
+
+// ---------------- TROFEO ----------------
+export function makeTrophy(color = 0xffd21f) {
+  const m = toon(color, 0x6a4a00), g = new THREE.Group();
+  add(g, cyl(0.55, 0.65, 0.25, 14), toon(0x4a2a6a), [0, 0.12, 0]);
+  add(g, cyl(0.12, 0.3, 0.55, 10), m, [0, 0.5, 0]);
+  add(g, cyl(0.62, 0.22, 0.8, 16), m, [0, 1.15, 0]);
+  add(g, torus(0.62, 0.06), m, [0, 1.55, 0], null, [PI / 2, 0, 0]);
+  for (const s of [-1, 1]) add(g, torus(0.27, 0.06), m, [0.72 * s, 1.2, 0], [0.8, 1, 1]);
+  add(g, sphere(0.16, 8), toon(0xff4fd8, 0xff4fd8), [0, 1.72, 0]);
+  return g;
 }

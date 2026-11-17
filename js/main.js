@@ -1,14 +1,17 @@
 // Amazing Gorilla Racing — arranque, menús, HUD y bucle principal.
 import * as THREE from './vendor/three.module.min.js';
-import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, LAPS, MENU_MUSIC, trackById, charById, kartById } from './data.js';
+import { CHARACTERS, KARTS, KART_COLORS, ITEMS, TRACKS, CUPS, DIFFICULTIES, CUP_POINTS, RACE_REWARD, LAPS, MENU_MUSIC, PODIUM_MUSIC, trackById, charById, kartById } from './data.js';
 import { save, loadSave, persist, resetSave } from './save.js';
-import { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } from './audio.js';
+import * as A from './audio.js';
 import { initInput, input, pollInput, consumePresses, enableTilt } from './input.js';
 import { buildTrack } from './track.js';
 import { Race } from './race.js';
 import { Particles, Ambient } from './fx.js';
 import { makeGorilla, makeKart, animateGorilla, animateKart, blobShadow } from './models.js';
+import { Post } from './post.js';
+import { Podium } from './podium.js';
 
+const { initAudio, sfx, setVolumes, startMusic, startEngine, stopEngine, updateEngine, suspendAudio } = A;
 const $ = id => document.getElementById(id);
 const hex = c => '#' + c.toString(16).padStart(6, '0');
 const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); };
@@ -22,6 +25,11 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setClearColor(0x1a0b3a);
 const camera = new THREE.PerspectiveCamera(68, 1, 0.3, 2400);
 const qualityK = () => ({ baja: 0.5, media: 0.8, alta: 1 }[save.settings.quality] || 1);
+const post = new Post(renderer);
+const usePost = () => !!save.settings.bloom && post.supported;
+function render(scene, cam) {
+  if (usePost()) post.render(scene, cam); else { renderer.setRenderTarget(null); renderer.render(scene, cam); }
+}
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -30,12 +38,14 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
   menuCam.aspect = w / h; placeShow(); applyShowOffset();
+  if (usePost()) post.setSize(q === 'alta' ? 4 : 0); else if (post.supported) post.disposeTargets();
+  menuRing.material.color.set(0x22e6ff).multiplyScalar(usePost() ? 2.2 : 1);
 }
 
 // ---------- Escaparate del menú ----------
 const menuScene = new THREE.Scene();
 const menuCam = new THREE.PerspectiveCamera(42, 1, 0.3, 300);
-let showModel = null, showKart = null, showGorilla = null, showPound = 0, showSpin = 0.6;
+let showModel = null, showKart = null, showGorilla = null, showPound = 0, showSpin = 0.6, menuRing = null;
 {
   const dome = new THREE.Mesh(new THREE.SphereGeometry(120, 24, 14), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
@@ -54,7 +64,7 @@ let showModel = null, showKart = null, showGorilla = null, showPound = 0, showSp
   const plat = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4, 0.5, 40), new THREE.MeshLambertMaterial({ color: 0x7a5cff }));
   plat.position.y = -0.26; menuScene.add(plat);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.12, 8, 48), new THREE.MeshBasicMaterial({ color: 0x22e6ff }));
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0; menuScene.add(ring);
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0; menuScene.add(ring); menuRing = ring;
   const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 40), new THREE.MeshLambertMaterial({ color: 0xff8ad8 }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = -0.5; menuScene.add(floor);
   menuCam.position.set(0, 3.1, 10.5); menuCam.lookAt(0, 1.3, 0);
@@ -103,13 +113,19 @@ function toast(msg) {
 let race = null, track = null, raceScene = null, fxAdd = null, fxNorm = null, ambient = null;
 let paused = false, mode = 'race', currentTrack = null, cupState = null, resultsShown = false, finishTimer = 0;
 let miniBg = null, rollIcon = 0, rollT = 0, lastHud = {};
+const podium = new Podium();
+let podiumAfter = null, podiumT = 0, rampHints = 0, fpsAcc = 0, fpsN = 0, fpsHinted = false, inTunnel = false;
+const rivalBuf = [{ pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }, { pan: 0, gain: 0, pitch: 0 }], rivalOut = [];
 
 const cup1Unlocked = () => Object.keys(save.trophies).some(k => k.startsWith('platano_'));
 const trackUnlocked = t => t.cup === 0 || cup1Unlocked();
 const diff = () => DIFFICULTIES[save.settings.diff] || DIFFICULTIES[1];
 
 function disposeRace() {
-  stopEngine();
+  stopEngine(); A.stopAmbience?.(); A.setTunnel?.(false); A.setMusicIntensity?.(0);
+  rivalOut.length = 0; A.updateRivalEngines?.(rivalOut);
+  podium.active = false; inTunnel = false;
+  if (race) race.dispose();
   if (track) track.dispose();
   if (ambient) ambient.dispose();
   if (fxAdd) { fxAdd.points.geometry.dispose(); fxAdd.mat.dispose(); fxNorm.points.geometry.dispose(); fxNorm.mat.dispose(); }
@@ -124,7 +140,9 @@ function startRace(trackId) {
     disposeRace();
     currentTrack = trackById(trackId);
     const q = qualityK();
-    track = buildTrack(currentTrack, q);
+    const gfx = { quality: q, bloom: usePost(), shadows: !!save.settings.shadows };
+    renderer.shadowMap.enabled = gfx.shadows;
+    track = buildTrack(currentTrack, gfx);
     raceScene = new THREE.Scene();
     raceScene.fog = track.fog; raceScene.background = new THREE.Color(currentTrack.theme.fog);
     raceScene.add(track.group);
@@ -133,11 +151,12 @@ function startRace(trackId) {
     ambient = new Ambient(currentTrack.theme.fx, currentTrack.theme.fxColor, q < 0.7 ? 60 : 140);
     raceScene.add(ambient.points);
     race = new Race({
-      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: diff(),
+      scene: raceScene, track, fx: { add: fxAdd, norm: fxNorm }, mode, difficulty: diff(), ...gfx,
       playerChar: save.char, playerKart: save.kart, playerColor: save.color,
       ghostData: mode === 'time' ? save.ghosts[trackId] : null, onEvent: onRaceEvent,
     });
-    paused = false; resultsShown = false; finishTimer = 0; lastHud = {};
+    paused = false; resultsShown = false; finishTimer = 0; lastHud = {}; fpsAcc = 0; fpsN = 0;
+    hint('');
     buildMinimap();
     $('hud-total').textContent = mode === 'time' ? '' : '/' + race.racers.length;
     $('hud-laps').textContent = LAPS;
@@ -146,6 +165,7 @@ function startRace(trackId) {
     $('hud-wrong').classList.add('hidden');
     show('hud');
     startMusic(currentTrack.music);
+    A.startAmbience?.(currentTrack.music.style); A.playJingle?.('start');
     startEngine();
     hudMsg(currentTrack.name, true);
     $('loading').classList.add('hidden');
@@ -157,18 +177,31 @@ function hudMsg(text, small) {
   m.className = 'hud-msg' + (small ? ' small' : ''); void m.offsetWidth; m.classList.add('show');
 }
 
+function hint(text) {
+  const h = $('hud-hint'); h.textContent = text; h.classList.toggle('show', !!text);
+  clearTimeout(hint.t); if (text) hint.t = setTimeout(() => h.classList.remove('show'), 4200);
+}
+
 function onRaceEvent(ev, data) {
-  if (ev === 'count') { hudMsg(String(data)); sfx.count(); }
-  else if (ev === 'go') { hudMsg('¡YA!'); sfx.go(); flash(); }
-  else if (ev === 'lap') { hudMsg('Vuelta ' + data, true); sfx.lap(); }
-  else if (ev === 'finalLap') { hudMsg('¡Última vuelta!', true); sfx.finalLap(); }
+  if (ev === 'count') { hudMsg(String(data)); sfx.count(); if (data === 3) hint('Pulsa DERRAPE justo en el «¡YA!» para una salida turbo'); }
+  else if (ev === 'go') { hudMsg('¡YA!'); sfx.go(); flash(); hint(''); A.haptic?.('go'); sfx.crowd?.(0, 0.8); }
+  else if (ev === 'startBoost') { setTimeout(() => hudMsg('¡Salida turbo!', true), 650); sfx.startBoost?.(); A.haptic?.('boost'); }
+  else if (ev === 'stall') { setTimeout(() => hudMsg('¡Demasiado pronto!', true), 650); sfx.stall?.(); }
+  else if (ev === 'ramp') { if (rampHints++ < 2) hint('¡Pulsa DERRAPE en el aire para hacer un truco!'); }
+  else if (ev === 'trick') hudMsg('¡Truco! 🌀', true);
+  else if (ev === 'lap') { hudMsg('Vuelta ' + data, true); sfx.lap(); sfx.crowd?.(0, 0.7); }
+  else if (ev === 'finalLap') { hudMsg('¡Última vuelta!', true); sfx.finalLap(); A.setMusicIntensity?.(1); sfx.crowd?.(0, 0.9); }
+  else if (ev === 'lightning') { flash(true); setTimeout(() => sfx.thunder?.(), 380); }
+  else if (ev === 'flash') { flash(); setTimeout(() => sfx.thunder?.(0, 0.7), 150); }
   else if (ev === 'finish') {
+    const good = mode === 'time' || data <= 3;
     hudMsg(mode === 'time' ? '¡META!' : data === 1 ? '¡1º! 🏆' : '¡META!');
-    if (mode === 'time' || data <= 3) sfx.finish(); else sfx.lose();
+    if (A.playJingle) A.playJingle(good ? 'win' : 'lose'); else if (good) sfx.finish(); else sfx.lose();
+    A.haptic?.('finish'); sfx.crowd?.();
     flash(); finishTimer = 3.6;
   }
 }
-function flash() { const f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+function flash(soft) { const f = $('flash'); f.classList.remove('go', 'soft'); void f.offsetWidth; f.classList.add(soft ? 'soft' : 'go'); }
 
 // ---------- Minimapa ----------
 function buildMinimap() {
@@ -243,14 +276,14 @@ function showResults() {
     $('r-title').textContent = record ? '¡Nuevo récord!' : 'Contrarreloj';
     list.innerHTML = `<li class="me"><b>⏱</b><span>Tu tiempo</span><span></span><span>${fmt(t)}</span></li>` +
       `<li><b>★</b><span>Mejor tiempo</span><span></span><span>${fmt(record ? t : best)}</span></li>`;
-    if (record) { save.best[currentTrack.id] = Math.round(t * 100) / 100; save.ghosts[currentTrack.id] = race.rec; }
+    if (record) { save.best[currentTrack.id] = Math.round(t * 100) / 100; save.ghosts[currentTrack.id] = race.rec; A.playJingle?.('record'); }
     reward = 20 + me.bananas + (record ? 50 : 0);
     rewardTxt = `+${reward} 🍌` + (record ? ' (récord +50)' : '');
     $('r-next').textContent = 'Menú ▶';
   } else {
     $('r-title').textContent = me.pos === 1 ? '¡Victoria!' : me.pos <= 3 ? '¡Podio!' : 'Resultados';
     if (mode === 'cup') {
-      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; });
+      res.forEach(r => { cupState.pts[r.char.id] = (cupState.pts[r.char.id] || 0) + CUP_POINTS[r.pos - 1]; cupState.ride[r.char.id] = { kart: r.kart, color: r.color }; });
       sub = `${cupState.cup.name} · Carrera ${cupState.i + 1}/3 · ${currentTrack.name}`;
     }
     for (const r of res) {
@@ -266,7 +299,27 @@ function showResults() {
   $('r-sub').textContent = sub;
   $('r-reward').textContent = rewardTxt;
   save.bananas += reward; persist();
-  show('results');
+  if (mode === 'race') startPodium(res.slice(0, 3).map(r => ({ char: r.char, kart: r.kart, color: r.color, isPlayer: r.isPlayer })), me.pos, false);
+  else show('results');
+}
+
+// Escena de podio antes del panel de resultados
+function startPodium(top, myPos, trophy) {
+  stopEngine(); A.stopAmbience?.(); rivalOut.length = 0; A.updateRivalEngines?.(rivalOut);
+  $('speedfx').classList.remove('on');
+  podium.setup(top); podiumT = 0;
+  podiumAfter = () => show('results');
+  startMusic(PODIUM_MUSIC);
+  if (trophy) A.playJingle?.('trophy');
+  $('podium-names').innerHTML = top.map((r, i) => `<span class="${r.isPlayer ? 'me' : ''}"><b>${i + 1}º</b> ${r.char.name}${r.isPlayer ? ' (tú)' : ''}</span>`).join('') +
+    (myPos > 3 ? `<span class="me"><b>${myPos}º</b> Tú</span>` : '');
+  $('podium-title').textContent = myPos === 1 ? '🏆 ¡Has ganado!' : myPos <= 3 ? '🎉 ¡Estás en el podio!' : 'Podio';
+  show('podium');
+}
+function endPodium() {
+  if (!podium.active || podiumT < 0.8) return;
+  podium.active = false; sfx.ui();
+  const f = podiumAfter; podiumAfter = null; if (f) f();
 }
 
 function showCupFinal() {
@@ -295,7 +348,7 @@ function showCupFinal() {
   $('r-next').textContent = 'Menú ▶';
   $('r-retry').classList.add('hidden');
   cupState.done = true;
-  show('results');
+  startPodium(rows.slice(0, 3).map(r => ({ char: r.ch, ...(cupState.ride[r.id] || {}), isPlayer: r.id === save.char })), rank, rank <= 3);
 }
 
 function toMenu() {
@@ -350,7 +403,7 @@ function buildCups() {
       `<p>${cup.tracks.map(id => trackById(id).name).join(' · ')}</p><p>${tr ? ['🏆 Oro', '🥈 Plata', '🥉 Bronce'][tr - 1] + ' en ' + diff().name : ok ? '3 carreras · sin trofeo aún' : 'Gana un trofeo en la Copa Plátano'}</p>`;
     c.onclick = () => {
       if (!ok) { sfx.deny(); toast('Gana un trofeo en la Copa Plátano'); return; }
-      sfx.ui(); mode = 'cup'; cupState = { cup, i: 0, pts: {} }; startRace(cup.tracks[0]);
+      sfx.ui(); mode = 'cup'; cupState = { cup, i: 0, pts: {}, ride: {} }; startRace(cup.tracks[0]);
     };
     box.appendChild(c);
   });
@@ -422,7 +475,19 @@ function buildSettings() {
       };
     });
   };
-  seg('set-controls', 'controls'); seg('set-quality', 'quality', resize);
+  seg('set-controls', 'controls');
+  // el nivel de gráficos también ajusta resplandor y sombras (luego se pueden cambiar por separado)
+  seg('set-quality', 'quality', () => { s.bloom = s.quality !== 'baja'; s.shadows = s.quality === 'alta'; persist(); resize(); buildSettings(); });
+  const flag = (id, key, after) => {
+    $(id).querySelectorAll('button').forEach(b => {
+      const v = b.dataset.v === '1';
+      b.classList.toggle('on', !!s[key] === v);
+      b.onclick = () => { s[key] = v; persist(); sfx.ui(); buildSettings(); if (after) after(); };
+    });
+  };
+  flag('set-bloom', 'bloom', resize); flag('set-shadows', 'shadows');
+  flag('set-haptics', 'haptics', () => { A.setHaptics?.(!!s.haptics); A.haptic?.('hit'); });
+  $('set-bloom').classList.toggle('off', !post.supported);
   $('set-music').value = s.music; $('set-sfx').value = s.sfx;
 }
 
@@ -440,15 +505,17 @@ function wireUi() {
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { sfx.back(); refreshShow(); show('menu'); });
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => { gTab = t.dataset.tab; gSel = null; sfx.ui(); refreshShow(); buildGarage(); });
   $('g-action').onclick = garageAction;
+  $('podium-next').onclick = endPodium;
+  $('s-podium').addEventListener('pointerup', e => { if (e.target.id !== 'podium-next' && podiumT > 2) endPodium(); });
   $('set-music').oninput = e => { save.settings.music = +e.target.value; setVolumes(save.settings.music, save.settings.sfx); persist(); };
   $('set-sfx').oninput = e => { save.settings.sfx = +e.target.value; setVolumes(save.settings.music, save.settings.sfx); };
   $('set-sfx').onchange = () => { persist(); sfx.coin(); };
   $('set-reset').onclick = () => {
-    if (confirm('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?')) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); toast('Partida borrada'); show('settings'); }
+    if (confirm('¿Borrar todo el progreso (plátanos, trofeos, récords y compras)?')) { resetSave(); save.settings.diff = 1; refreshShow(); buildSettings(); A.setHaptics?.(true); resize(); toast('Partida borrada'); show('settings'); }
   };
   $('btn-pause').onclick = () => setPaused(true);
   $('p-resume').onclick = () => setPaused(false);
-  $('p-restart').onclick = () => { sfx.ui(); suspendAudio(false); if (mode === 'cup') { cupState.i = 0; cupState.pts = {}; startRace(cupState.cup.tracks[0]); } else startRace(currentTrack.id); };
+  $('p-restart').onclick = () => { sfx.ui(); suspendAudio(false); if (mode === 'cup') { cupState.i = 0; cupState.pts = {}; cupState.ride = {}; startRace(cupState.cup.tracks[0]); } else startRace(currentTrack.id); };
   $('p-quit').onclick = () => { sfx.back(); suspendAudio(false); toMenu(); };
   $('r-retry').onclick = () => { sfx.ui(); startRace(currentTrack.id); };
   $('r-next').onclick = () => {
@@ -483,6 +550,13 @@ let last = performance.now(), tGlobal = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const ps = renderer.domElement.height * 0.05;
+  if (podium.active) {
+    podiumT += dt;
+    podium.update(dt, innerWidth / innerHeight); podium.fx.update(dt, ps);
+    render(podium.scene, podium.camera);
+    return;
+  }
   if (race) {
     if (!paused) {
       pollInput(dt);
@@ -490,18 +564,29 @@ function frame(now) {
       race.update(dt, input);
       consumePresses();
       race.updateCamera(camera, dt, camera.aspect);
-      track.update(dt, race.t, camera.position);
-      const ps = renderer.domElement.height * 0.05;
+      track.update(dt, race.t, camera.position, race.player);
+      race.lateUpdate(dt, camera);
       fxAdd.update(dt, ps); fxNorm.update(dt, ps);
+      const p = race.player, tun = track.samples[p.idx].tun;
+      ambient.points.visible = !tun;
       ambient.update(race.t, camera.position);
-      const p = race.player;
+      // sonido continuo: motor propio, rivales cercanos, clima y eco del túnel
       updateEngine(Math.min(1.3, Math.abs(p.speed) / p.maxSpeed), p.drifting && p.hopY < 0.1, p.boostT > 0);
       if (!resultsShown) {
+        const n = race.rivalAudio(rivalBuf); rivalOut.length = 0; for (let i = 0; i < n; i++) rivalOut.push(rivalBuf[i]);
+        A.updateRivalEngines?.(rivalOut);
+        A.setAmbienceLevel?.(race.weather.level);
+        if (tun !== inTunnel) { inTunnel = tun; A.setTunnel?.(tun); }
         updateHud(dt);
         if (finishTimer > 0) { finishTimer -= dt; if (finishTimer <= 0) showResults(); }
+        // aviso si el móvil no puede con los gráficos
+        if (race.state === 'racing' && !fpsHinted && race.time < 9) {
+          fpsAcc += dt; fpsN++;
+          if (fpsAcc > 6) { if (fpsN / fpsAcc < 24 && save.settings.quality !== 'baja') { fpsHinted = true; toast('¿Va lento? Baja los gráficos en Ajustes ⚙️'); } fpsAcc = -1e9; }
+        }
       }
     } else if (input.pausePressed) { consumePresses(); setPaused(false); }
-    renderer.render(raceScene, camera);
+    render(raceScene, camera);
   } else {
     tGlobal += dt;
     if (showModel) {
@@ -509,10 +594,10 @@ function frame(now) {
       showModel.rotation.y += dt * showSpin;
       showPound = Math.max(0, showPound - dt);
       const idle = Math.sin(tGlobal * 0.7) > 0.86;
-      animateGorilla(showGorilla, tGlobal, Math.sin(tGlobal * 1.3) * 0.5, showPound > 0 ? 'pound' : idle ? 'cheer' : 'drive', 0.4);
+      animateGorilla(showGorilla, tGlobal, { steer: Math.sin(tGlobal * 1.3) * 0.5, mode: showPound > 0 ? 'pound' : idle ? 'cheer' : 'drive', face: showPound > 0 || idle ? 'happy' : 'neutral', speedK: 0.4, dt });
       animateKart(showKart, dt, 6, Math.sin(tGlobal * 1.3) * 0.5);
     }
-    renderer.render(menuScene, menuCam);
+    render(menuScene, menuCam);
   }
 }
 
@@ -520,6 +605,7 @@ function frame(now) {
 initInput();
 wireUi();
 setVolumes(save.settings.music, save.settings.sfx);
+A.setHaptics?.(save.settings.haptics !== false);
 if (save.settings.controls === 'tilt') enableTilt(true);
 refreshShow();
 resize();
@@ -531,4 +617,4 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 }
 
 // Acceso para pruebas automáticas
-window.__game = { get race() { return race; }, get track() { return track; }, save, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };
+window.__game = { get race() { return race; }, get track() { return track; }, podium, post, save, startRace: (id, m = 'race') => { mode = m; startRace(id); }, showResults: () => showResults() };

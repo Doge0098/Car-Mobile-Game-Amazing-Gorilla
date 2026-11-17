@@ -6,19 +6,25 @@ Es una **PWA**: se instala desde el navegador y después funciona **sin conexió
 ## Qué incluye
 
 - **6 mapas** en 2 copas: Selva Esmeralda, Playa Coco, Volcán Furioso, Cumbre Helada, Ciudad Neón y Templo Arcoíris.
-- **5 rivales con IA** (esquivan, usan objetos y se adaptan a la dificultad: Fácil / Normal / Difícil).
-- **6 power-ups**: Turbo Plátano, Coco Misil, Cáscara, Escudo Hoja, Golpe de Pecho y Furia Gorila.
-- **Derrape con mini-turbo** de 3 niveles, aceleradores en pista y plátanos para coger.
-- **Modos**: Carrera rápida, Copas (con trofeos) y Contrarreloj con fantasma de tu mejor vuelta.
+  Todos tienen cuestas, un puente, un túnel y rampas de salto.
+- **5 rivales con IA** (esquivan, usan objetos, hacen trucos y se adaptan a la dificultad: Fácil / Normal / Difícil).
+- **9 power-ups**: Turbo Plátano, Coco Misil, Cáscara, Escudo Hoja, Golpe de Pecho, Furia Gorila, Rayo (encoge a los rivales),
+  Imán de Plátanos y Barril Rodante.
+- **Conducción**: derrape con mini-turbo de 3 niveles, salida turbo, trucos en el aire, aceleradores y plátanos.
+- **Obstáculos vivos** por mapa: barriles, cangrejos, géiseres de lava, pingüinos, robots y estrellas saltarinas.
+- **Clima**: chubascos con rayos en la selva, ventisca en la cumbre, meteoritos en el volcán y estrellas fugaces en el templo.
+- **Modos**: Carrera rápida, Copas (con trofeos y podio) y Contrarreloj con fantasma de tu mejor tiempo.
 - **Garaje**: 6 gorilas y 5 coches con estadísticas distintas, y pintura para el coche.
-- Música y efectos generados por código (no hay archivos de audio), controles táctiles o por inclinación.
+- **Gráficos**: resplandor (bloom), sombras reales, agua y lava animadas, público, vallas, banderas, marcas de derrape y estelas.
+  Tres niveles de calidad y opciones para desactivar resplandor y sombras en móviles modestos.
+- **Sonido** generado por código (sin archivos de audio): música por mapa, voces de gorila, ambiente, motores rivales y vibración.
 
 ## Controles
 
 | Acción | Móvil | Teclado |
 | --- | --- | --- |
 | Girar | ◀ ▶ o inclinar el móvil | Flechas / A-D |
-| Derrape | DERRAPE (mantener y soltar) | Espacio |
+| Derrape / truco en el aire / salida turbo | DERRAPE | Espacio |
 | Usar objeto | OBJETO o tocar la casilla | E / Mayús |
 | Frenar | FRENO | Flecha abajo / S |
 | Pausa | ❚❚ | P / Esc |
@@ -46,9 +52,12 @@ Tras abrirlo una vez con conexión, el juego queda guardado y se puede jugar off
 ## Estructura
 
 - `index.html`, `css/style.css` — interfaz y HUD.
-- `js/main.js` — menús, HUD y bucle principal.
+- `js/main.js` — menús, HUD, ajustes y bucle principal.
 - `js/race.js` — física, IA, power-ups, cámara y fantasma.
-- `js/track.js` — generación de circuitos y decorado.
+- `js/track.js` — trazado con desnivel, terreno, agua/lava y elementos de pista.
+- `js/scenery.js` — túnel, gradas, banderas, vallas, farolas y fauna.
+- `js/world.js` — clima, obstáculos vivos, marcas de derrape y estelas.
+- `js/post.js` — resplandor (bloom). `js/podium.js` — escena de podio.
 - `js/models.js`, `js/fx.js` — modelos 3D y partículas.
 - `js/audio.js`, `js/input.js`, `js/save.js`, `js/data.js` — sonido, controles, guardado y datos.
 - `sw.js`, `manifest.webmanifest`, `icons/` — instalación y modo sin conexión.

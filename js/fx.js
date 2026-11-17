@@ -97,7 +97,7 @@ export class Ambient {
       const ph = this.ph[i];
       const x = this.off[i * 3] + Math.sin(t * 0.7 + ph) * drift, y = this.off[i * 3 + 1] + vy * t, z = this.off[i * 3 + 2] + Math.cos(t * 0.6 + ph) * drift;
       this.pos[i * 3] = cam.x + ((((x - cam.x) % b) + b) % b) - b / 2;
-      this.pos[i * 3 + 1] = (((y % 26) + 26) % 26) + 0.3;
+      this.pos[i * 3 + 1] = cam.y - 9 + (((y % 26) + 26) % 26);
       this.pos[i * 3 + 2] = cam.z + ((((z - cam.z) % b) + b) % b) - b / 2;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
